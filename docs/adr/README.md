@@ -1,0 +1,13 @@
+# Architecture decision records
+
+- [0001: Keep Player Entries scoped to one Auction](0001-auction-scoped-player-entries.md)
+- [0002: Use server-authoritative Bid ordering](0002-server-authoritative-bid-ordering.md)
+- [0003: Use passwordless sign-in](0003-passwordless-sign-in.md)
+- [0004: Retain immutable Auction history](0004-retain-immutable-auction-history.md)
+- [0005: Use a constrained zero-cost stack for the private beta](0005-use-a-constrained-zero-cost-beta-stack.md)
+- [0006: Commit Bids in PostgreSQL before acknowledgement or broadcast](0006-commit-bids-in-postgres-before-broadcast.md)
+- [0007: Use database deadlines and idempotent finalization](0007-use-database-deadlines-and-idempotent-finalization.md)
+- [0008: Broker short-lived private Realtime tokens](0008-broker-private-realtime-tokens.md)
+- [0009: Route fairness-affecting changes through one Auction Command module](0009-route-fairness-changes-through-one-module.md)
+- [0010: Use a focused shadcn interface system](0010-use-a-focused-shadcn-interface-system.md)
+- [0011: Harden passwordless authentication and limit administration](0011-harden-passwordless-auth-and-limit-administration.md)

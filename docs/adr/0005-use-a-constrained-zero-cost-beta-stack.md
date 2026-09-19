@@ -1,0 +1,3 @@
+# Use a constrained zero-cost stack for the private beta
+
+The private, non-commercial beta uses Next.js with TypeScript and shadcn/ui on Vercel Hobby; Supabase Free for PostgreSQL, Realtime, and Team logo storage; Better Auth for email OTP and Google sign-in; and Nodemailer with a dedicated Gmail account. This choice keeps the first deployment free but limits it to one Live Auction, 16 recommended Teams, 40 connected browser tabs, two public state broadcasts per second, best-effort availability, and no commercial use. The beta has no Viewer feature or external error tracker. TournyHub must move to paid production infrastructure before it accepts commercial use or the original scale targets.
