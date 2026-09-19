@@ -1,6 +1,6 @@
 # Implementation plan
 
-Status: Confirmed; implementation not started
+Status: Confirmed; implementation in progress
 
 The product owner confirmed the specification and supporting documents through the published `ready-for-agent` issue. Work proceeds in the vertical slices below. Each slice includes its own schema, server behavior, UI, tests, and documentation updates so unfinished domain logic does not accumulate behind mock screens.
 

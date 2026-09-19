@@ -1,0 +1,96 @@
+# TournyHub
+
+TournyHub is a private, non-commercial beta for live player Auctions. This repository currently contains the Ticket 01 application foundation. Authentication and Auction behavior belong to later dependency-gated tickets.
+
+## Requirements
+
+- Node.js 24, as pinned in `.node-version`
+- pnpm 10.33.0, as pinned in `package.json`
+- A Docker-compatible container runtime for the local Supabase PostgreSQL service
+
+## Start the application
+
+Install the pinned dependencies from a clean checkout:
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+Copy `.env.example` to `.env.local`, then replace provider placeholders when the matching provider-backed features are implemented. Validate the file and start Next.js:
+
+```bash
+pnpm env:check
+pnpm dev
+```
+
+The application runs at `http://localhost:3000`. `pnpm build` creates a production build and `pnpm start` serves that build.
+
+## Environment
+
+The startup validator requires these variables:
+
+| Variable                               | Purpose                                                         | Exposure     |
+| -------------------------------------- | --------------------------------------------------------------- | ------------ |
+| `NEXT_PUBLIC_APP_URL`                  | Canonical application URL                                       | Browser-safe |
+| `DATABASE_URL`                         | PostgreSQL connection used by server modules and database tests | Server-only  |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project API URL                                        | Browser-safe |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase browser client key                                     | Browser-safe |
+| `SUPABASE_SERVICE_ROLE_KEY`            | Privileged Supabase server access                               | Server-only  |
+
+Validation reports variable names and corrective steps without printing configured values. The checked-in example contains local placeholders, not production credentials.
+
+## Local database
+
+The Supabase CLI configuration lives in `supabase/`. A container runtime must be running before these commands:
+
+```bash
+pnpm db:start
+pnpm db:migrate
+pnpm db:status
+```
+
+`pnpm db:migrate` applies pending versioned migrations. `pnpm db:status` compares the migration files with the local migration history. The baseline migration records the starting schema without adding domain tables.
+
+Use `pnpm db:stop` when finished. `pnpm db:reset` recreates the local database and reapplies every migration, so use it only for disposable development data.
+
+## Quality commands
+
+| Command             | Check                                              |
+| ------------------- | -------------------------------------------------- |
+| `pnpm format`       | Write Prettier formatting                          |
+| `pnpm format:check` | Verify formatting                                  |
+| `pnpm lint`         | Run ESLint with no warnings                        |
+| `pnpm typecheck`    | Run the TypeScript compiler without emitting files |
+| `pnpm test:unit`    | Run Vitest unit tests                              |
+| `pnpm test:db`      | Run database tests against `DATABASE_URL`          |
+| `pnpm test:browser` | Run Playwright in Chromium                         |
+| `pnpm check`        | Run the complete local validation sequence         |
+
+Install the browser once, start and migrate the local database, then run all checks:
+
+```bash
+pnpm exec playwright install chromium
+pnpm db:start
+pnpm db:migrate
+pnpm check
+pnpm db:stop
+```
+
+Continuous integration performs the same sequence from a clean environment.
+
+## Source modules
+
+The initial directories reserve the module ownership defined in `docs/architecture.md`:
+
+| Path                           | Module                                             |
+| ------------------------------ | -------------------------------------------------- |
+| `src/features/identity/`       | Identity user interface and invitations            |
+| `src/features/auctions/setup/` | Auction Setup and Draft workflow                   |
+| `src/server/auction-command/`  | Authoritative fairness-affecting commands          |
+| `src/server/auction-query/`    | Authorized snapshots and read models               |
+| `src/server/realtime/`         | Committed revision distribution and private access |
+| `src/server/import-export/`    | Player imports and Auction Results exports         |
+| `src/features/administration/` | Platform Administration interface                  |
+| `src/domain/`                  | Shared domain types without framework code         |
+
+The Auction Command module remains the primary domain and testing seam. No Ticket 02 authentication or Auction behavior is part of this foundation.

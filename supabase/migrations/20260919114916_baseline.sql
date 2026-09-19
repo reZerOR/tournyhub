@@ -1,0 +1,1 @@
+-- TournyHub schema baseline. Domain records are introduced by later tickets.

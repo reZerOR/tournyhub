@@ -1,0 +1,11 @@
+.scratch
+.next
+AGENTS.md
+CONTEXT.md
+coverage
+docs
+node_modules
+playwright-report
+test-results
+pnpm-lock.yaml
+supabase/.temp
