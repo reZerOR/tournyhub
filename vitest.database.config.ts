@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 import nextEnvironment from "@next/env";
 import { defineConfig } from "vitest/config";
 
@@ -7,6 +9,11 @@ nextEnvironment.loadEnvConfig(process.cwd());
 parseEnvironment(process.env);
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   test: {
     fileParallelism: false,
     include: ["tests/database/**/*.test.ts"],

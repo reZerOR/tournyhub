@@ -1,3 +1,7 @@
+import Link from "next/link";
+
+import { buttonVariants } from "@/components/ui/button";
+
 export default function Home() {
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-5xl flex-1 flex-col justify-center px-6 py-16 sm:px-10">
@@ -15,6 +19,11 @@ export default function Home() {
           The application foundation is ready for the identity and Auction
           workflows that follow.
         </p>
+        <div>
+          <Link href="/sign-in" className={buttonVariants()}>
+            Sign in
+          </Link>
+        </div>
       </div>
     </main>
   );

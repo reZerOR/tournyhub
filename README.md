@@ -1,6 +1,6 @@
 # TournyHub
 
-TournyHub is a private, non-commercial beta for live player Auctions. This repository currently contains the Ticket 01 application foundation. Authentication and Auction behavior belong to later dependency-gated tickets.
+TournyHub is a private, non-commercial beta for live player Auctions. This repository contains the application foundation plus email one-time-code authentication and a protected application shell. Auction behavior belongs to later dependency-gated tickets.
 
 ## Requirements
 
@@ -36,8 +36,11 @@ The startup validator requires these variables:
 | `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project API URL                                        | Browser-safe |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase browser client key                                     | Browser-safe |
 | `SUPABASE_SERVICE_ROLE_KEY`            | Privileged Supabase server access                               | Server-only  |
+| `BETTER_AUTH_SECRET`                   | High-entropy secret Better Auth uses to sign sessions           | Server-only  |
 
 Validation reports variable names and corrective steps without printing configured values. The checked-in example contains local placeholders, not production credentials.
+
+`EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASSWORD` are optional. Without them, sign-in emails are written to the gitignored `.dev-emails/` directory instead of being sent, which is sufficient for local development.
 
 ## Local database
 
@@ -82,15 +85,16 @@ Continuous integration performs the same sequence from a clean environment.
 
 The initial directories reserve the module ownership defined in `docs/architecture.md`:
 
-| Path                           | Module                                             |
-| ------------------------------ | -------------------------------------------------- |
-| `src/features/identity/`       | Identity user interface and invitations            |
-| `src/features/auctions/setup/` | Auction Setup and Draft workflow                   |
-| `src/server/auction-command/`  | Authoritative fairness-affecting commands          |
-| `src/server/auction-query/`    | Authorized snapshots and read models               |
-| `src/server/realtime/`         | Committed revision distribution and private access |
-| `src/server/import-export/`    | Player imports and Auction Results exports         |
-| `src/features/administration/` | Platform Administration interface                  |
-| `src/domain/`                  | Shared domain types without framework code         |
+| Path                           | Module                                               |
+| ------------------------------ | ---------------------------------------------------- |
+| `src/server/auth/`             | Better Auth configuration, sessions, OTP rate limits |
+| `src/features/identity/`       | Identity user interface and invitations              |
+| `src/features/auctions/setup/` | Auction Setup and Draft workflow                     |
+| `src/server/auction-command/`  | Authoritative fairness-affecting commands            |
+| `src/server/auction-query/`    | Authorized snapshots and read models                 |
+| `src/server/realtime/`         | Committed revision distribution and private access   |
+| `src/server/import-export/`    | Player imports and Auction Results exports           |
+| `src/features/administration/` | Platform Administration interface                    |
+| `src/domain/`                  | Shared domain types without framework code           |
 
-The Auction Command module remains the primary domain and testing seam. No Ticket 02 authentication or Auction behavior is part of this foundation.
+The Auction Command module remains the primary domain and testing seam for the Auction behavior implemented in later tickets.

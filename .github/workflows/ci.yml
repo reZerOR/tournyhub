@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 30
     env:
       CI: true
+      BETTER_AUTH_SECRET: ci-only-secret-value-that-is-at-least-32-chars
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-publishable-key

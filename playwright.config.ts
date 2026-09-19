@@ -23,6 +23,8 @@ export default defineConfig({
     command: `pnpm dev --hostname 127.0.0.1 --port ${port}`,
     env: {
       ...process.env,
+      BETTER_AUTH_SECRET:
+        process.env.BETTER_AUTH_SECRET ?? "browser-test-secret-of-32-chars!!",
       DATABASE_URL:
         process.env.DATABASE_URL ??
         "postgresql://postgres:postgres@127.0.0.1:54322/postgres",

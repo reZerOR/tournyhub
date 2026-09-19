@@ -36,6 +36,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# local development email outbox
+/.dev-emails
+
 # vercel
 .vercel
 
