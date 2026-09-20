@@ -1,6 +1,10 @@
 import nodemailer from "nodemailer";
 
-import type { EmailSender, OtpEmailMessage } from "@/server/email/types";
+import type {
+  EmailSender,
+  InvitationEmailMessage,
+  OtpEmailMessage,
+} from "@/server/email/types";
 
 const OTP_EMAIL_SUBJECT: Record<OtpEmailMessage["type"], string> = {
   "change-email": "Confirm your new TournyHub email",
@@ -31,6 +35,19 @@ export function createNodemailerEmailSender(config: SmtpConfig): EmailSender {
         from: config.from,
         subject: OTP_EMAIL_SUBJECT[type],
         text: `Your TournyHub verification code is ${otp}. It expires in 10 minutes and can be used once.`,
+        to,
+      });
+    },
+    async sendInvitationEmail({
+      auctionTitle,
+      link,
+      teamName,
+      to,
+    }: InvitationEmailMessage): Promise<void> {
+      await transporter.sendMail({
+        from: config.from,
+        subject: `Represent ${teamName} in ${auctionTitle}`,
+        text: `You have been invited to represent ${teamName} in ${auctionTitle} on TournyHub.\n\nAccept the invitation: ${link}\n\nThe link works once and expires in seven days.`,
         to,
       });
     },

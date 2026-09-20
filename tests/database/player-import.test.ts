@@ -387,10 +387,10 @@ describe("commitPlayerImport", () => {
     expect(await entryCount(owner.auctionId)).toBe(0);
   });
 
-  it("returns null once the Auction is no longer a Draft", async () => {
+  it("returns null once the Auction is no longer editable", async () => {
     const { auctionId, organizerId } = await createAuction("commit-ready");
     await pool.query(
-      `update "auction" set "status" = 'ready' where "id" = $1`,
+      `update "auction" set "status" = 'completed' where "id" = $1`,
       [auctionId],
     );
 

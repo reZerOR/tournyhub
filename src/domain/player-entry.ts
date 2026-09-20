@@ -20,9 +20,13 @@ export interface PlayerEntry {
   displayName: string;
   externalPlayerId: null | string;
   id: string;
+  /** True for a Player Representative, who is preassigned and never offered for bidding. */
+  isRepresentative: boolean;
   phoneNumber: null | string;
   role: null | string;
   startingPriceOverride: null | number;
+  /** The Team this Player is preassigned to as its Player Representative. */
+  teamId: null | string;
   updatedAt: Date;
 }
 

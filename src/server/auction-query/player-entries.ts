@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 
 import type { CustomPlayerField, PlayerEntry } from "@/domain/player-entry";
+import { isEditableAuction } from "@/server/auction-query/editable";
 
 /**
  * A pool or a transaction client, so a command can reuse these authorized
@@ -22,9 +23,11 @@ interface PlayerEntryRow {
   display_name: string;
   external_player_id: null | string;
   id: string;
+  is_representative: boolean;
   phone_number: null | string;
   role: null | string;
   starting_price_override: null | number;
+  team_id: null | string;
   updated_at: Date;
 }
 
@@ -55,37 +58,22 @@ function mapPlayerEntryRow(
     displayName: row.display_name,
     externalPlayerId: row.external_player_id,
     id: row.id,
+    isRepresentative: row.is_representative,
     phoneNumber: row.phone_number,
     role: row.role,
     startingPriceOverride: row.starting_price_override,
+    teamId: row.team_id,
     updatedAt: row.updated_at,
   };
 }
 
-/**
- * An unrelated Organizer and a missing or non-Draft Auction both produce null
- * so a User cannot confirm another User's Auction exists by its id.
- */
-async function isEditableDraftAuction(
-  pool: PlayerSetupQueryable,
-  organizerId: string,
-  auctionId: string,
-): Promise<boolean> {
-  const result = await pool.query(
-    `select 1 from "auction"
-      where "id" = $1 and "organizer_id" = $2 and "status" = 'draft'`,
-    [auctionId, organizerId],
-  );
-  return result.rowCount === 1;
-}
-
-/** This Auction's Custom Player Field definitions, or null when it is not an editable Draft for this Organizer. */
+/** This Auction's Custom Player Field definitions, or null when it is not editable for this Organizer. */
 export async function getCustomPlayerFieldsForOrganizer(
   pool: PlayerSetupQueryable,
   organizerId: string,
   auctionId: string,
 ): Promise<CustomPlayerField[] | null> {
-  if (!(await isEditableDraftAuction(pool, organizerId, auctionId))) {
+  if (!(await isEditableAuction(pool, organizerId, auctionId))) {
     return null;
   }
 
@@ -98,13 +86,13 @@ export async function getCustomPlayerFieldsForOrganizer(
   return result.rows.map(mapCustomPlayerFieldRow);
 }
 
-/** This Auction's Player Entries with their custom values, or null when it is not an editable Draft for this Organizer. */
+/** This Auction's Player Entries with their custom values, or null when it is not editable for this Organizer. */
 export async function getPlayerEntriesForOrganizer(
   pool: PlayerSetupQueryable,
   organizerId: string,
   auctionId: string,
 ): Promise<PlayerEntry[] | null> {
-  if (!(await isEditableDraftAuction(pool, organizerId, auctionId))) {
+  if (!(await isEditableAuction(pool, organizerId, auctionId))) {
     return null;
   }
 

@@ -4,7 +4,11 @@ import { defineConfig, devices } from "@playwright/test";
 nextEnv.loadEnvConfig(process.cwd());
 
 const port = 3100;
-const baseURL = `http://127.0.0.1:${port}`;
+// Point the suite at an already-running dev server (for example the one on
+// http://localhost:3000 during local development) instead of starting one.
+// The origin must match NEXT_PUBLIC_APP_URL so Better Auth accepts requests.
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+const baseURL = externalBaseURL ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   globalSetup: "./tests/browser/global-setup.ts",
@@ -23,30 +27,33 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: {
-    command: `pnpm dev --hostname 127.0.0.1 --port ${port}`,
-    env: {
-      ...process.env,
-      BETTER_AUTH_SECRET:
-        process.env.BETTER_AUTH_SECRET ?? "browser-test-secret-of-32-chars!!",
-      DATABASE_URL:
-        process.env.DATABASE_URL ??
-        "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
-      GOOGLE_CLIENT_ID:
-        process.env.GOOGLE_CLIENT_ID ?? "browser-test-google-client-id",
-      GOOGLE_CLIENT_SECRET:
-        process.env.GOOGLE_CLIENT_SECRET ?? "browser-test-google-secret",
-      NEXT_PUBLIC_APP_URL: baseURL,
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-        "browser-test-publishable-key",
-      NEXT_PUBLIC_SUPABASE_URL:
-        process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321",
-      SUPABASE_SERVICE_ROLE_KEY:
-        process.env.SUPABASE_SERVICE_ROLE_KEY ??
-        "browser-test-service-role-key",
-    },
-    reuseExistingServer: !process.env.CI,
-    url: baseURL,
-  },
+  webServer: externalBaseURL
+    ? undefined
+    : {
+        command: `pnpm dev --hostname 127.0.0.1 --port ${port}`,
+        env: {
+          ...process.env,
+          BETTER_AUTH_SECRET:
+            process.env.BETTER_AUTH_SECRET ??
+            "browser-test-secret-of-32-chars!!",
+          DATABASE_URL:
+            process.env.DATABASE_URL ??
+            "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
+          GOOGLE_CLIENT_ID:
+            process.env.GOOGLE_CLIENT_ID ?? "browser-test-google-client-id",
+          GOOGLE_CLIENT_SECRET:
+            process.env.GOOGLE_CLIENT_SECRET ?? "browser-test-google-secret",
+          NEXT_PUBLIC_APP_URL: baseURL,
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+            process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+            "browser-test-publishable-key",
+          NEXT_PUBLIC_SUPABASE_URL:
+            process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321",
+          SUPABASE_SERVICE_ROLE_KEY:
+            process.env.SUPABASE_SERVICE_ROLE_KEY ??
+            "browser-test-service-role-key",
+        },
+        reuseExistingServer: !process.env.CI,
+        url: baseURL,
+      },
 });

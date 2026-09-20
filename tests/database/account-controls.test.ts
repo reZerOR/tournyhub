@@ -36,6 +36,7 @@ function createFakeEmailSender() {
   const sent: OtpEmailMessage[] = [];
   return {
     sender: {
+      async sendInvitationEmail(): Promise<void> {},
       async sendOtpEmail(message: OtpEmailMessage): Promise<void> {
         sent.push(message);
       },

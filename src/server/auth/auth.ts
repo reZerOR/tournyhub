@@ -9,7 +9,6 @@ import { serverEnv } from "@/config/server-env";
 import { getPool } from "@/server/database/pool";
 import { checkAndRecordOtpRequest } from "@/server/auth/otp-request-log";
 import { createDefaultEmailSender } from "@/server/email/create-email-sender";
-import { withDevInboxRecording } from "@/server/email/dev-inbox";
 import type { EmailSender } from "@/server/email/types";
 
 const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 7;
@@ -62,11 +61,6 @@ export function buildAuthOptions({
       }
     : undefined,
 }: CreateAuthOptions = {}) {
-  const effectiveEmailSender =
-    process.env.NODE_ENV === "production"
-      ? emailSender
-      : withDevInboxRecording(emailSender);
-
   return {
     baseURL: serverEnv.NEXT_PUBLIC_APP_URL,
     secret: serverEnv.BETTER_AUTH_SECRET,
@@ -201,7 +195,7 @@ export function buildAuthOptions({
         },
         storeOTP: "hashed",
         async sendVerificationOTP({ email, otp, type }) {
-          await effectiveEmailSender.sendOtpEmail({ to: email, otp, type });
+          await emailSender.sendOtpEmail({ to: email, otp, type });
         },
       }),
       // Must stay last: it lets `auth.api.*` server calls set cookies

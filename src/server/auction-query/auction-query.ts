@@ -6,6 +6,7 @@ import type {
   CloseMode,
   RulesMode,
 } from "@/domain/auction";
+import type { Queryable } from "@/server/database/queryable";
 
 interface AuctionRow {
   close_mode: CloseMode;
@@ -74,6 +75,23 @@ export async function getDraftAuctionForOrganizer(
   const result = await pool.query<AuctionRow>(
     `select * from "auction"
       where "id" = $1 and "organizer_id" = $2 and "status" = 'draft'`,
+    [auctionId, organizerId],
+  );
+  return result.rows[0] ? mapRow(result.rows[0]) : null;
+}
+
+/**
+ * An authorized snapshot of an Auction whose setup is still editable (Draft
+ * or Ready). Returns null for a missing, unrelated, or non-editable Auction.
+ */
+export async function getEditableAuctionForOrganizer(
+  pool: Queryable,
+  organizerId: string,
+  auctionId: string,
+): Promise<Auction | null> {
+  const result = await pool.query<AuctionRow>(
+    `select * from "auction"
+      where "id" = $1 and "organizer_id" = $2 and "status" in ('draft', 'ready')`,
     [auctionId, organizerId],
   );
   return result.rows[0] ? mapRow(result.rows[0]) : null;

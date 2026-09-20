@@ -1,10 +1,9 @@
 /**
  * Playwright global setup: clear the IP-based rate limit rows accumulated by
- * the browser test suite's own loopback address before each run.  The
- * database tests use random IPs so they never contribute to this counter, but
- * re-running the browser suite within the same 60-second Better Auth rate
- * limit window would otherwise hit the OTP cap and cause spurious sign-in
- * failures.
+ * the browser test suite's own loopback address before each run, and remove
+ * the previous run's browser-test Users. Removing those Users cascades their
+ * Auctions, which also clears any Live Auction left behind so the beta's
+ * one-Live-Auction limit never blocks a fresh run.
  */
 import nextEnv from "@next/env";
 import pg from "pg";
@@ -19,6 +18,7 @@ export default async function globalSetup() {
   const pool = new pg.Pool({ connectionString: databaseUrl });
   try {
     await pool.query(`DELETE FROM "rateLimit" WHERE key LIKE '127.0.0.1|%'`);
+    await pool.query(`DELETE FROM "user" WHERE email LIKE 'browser-%'`);
   } finally {
     await pool.end();
   }

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { requireDraftAuction } from "@/features/auctions/setup/data";
+import { requireEditableAuction } from "@/features/auctions/setup/data";
 import { SetupNav } from "@/features/auctions/setup/setup-nav";
 
 export default async function AuctionSetupLayout({
@@ -11,7 +11,7 @@ export default async function AuctionSetupLayout({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const auction = await requireDraftAuction(id);
+  const auction = await requireEditableAuction(id);
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">

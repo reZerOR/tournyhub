@@ -1,25 +1,44 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { EmailSender, OtpEmailMessage } from "@/server/email/types";
+import type {
+  EmailSender,
+  InvitationEmailMessage,
+  OtpEmailMessage,
+} from "@/server/email/types";
 
 const DEV_EMAIL_DIRECTORY = path.join(process.cwd(), ".dev-emails");
 
 /**
- * Local development fallback used when SMTP is not configured. It writes
- * the OTP to a file instead of a real inbox, and deliberately never prints
- * it through `console`, so codes never reach application logs.
+ * Local development fallback used when SMTP is not configured. It writes the
+ * message to a file instead of a real inbox, and deliberately never prints it
+ * through `console`, so codes and invitation links never reach application
+ * logs.
  */
 export function createFileEmailSender(): EmailSender {
+  async function write(fileName: string, body: string): Promise<void> {
+    await mkdir(DEV_EMAIL_DIRECTORY, { recursive: true });
+    await writeFile(path.join(DEV_EMAIL_DIRECTORY, fileName), body, "utf8");
+  }
+
   return {
     async sendOtpEmail({ to, otp, type }: OtpEmailMessage): Promise<void> {
-      await mkdir(DEV_EMAIL_DIRECTORY, { recursive: true });
       const safeEmail = to.replace(/[^a-z0-9@.-]/gi, "_");
-      const fileName = `${Date.now()}-${type}-${safeEmail}.txt`;
-      await writeFile(
-        path.join(DEV_EMAIL_DIRECTORY, fileName),
+      await write(
+        `${Date.now()}-${type}-${safeEmail}.txt`,
         `To: ${to}\nType: ${type}\nOTP: ${otp}\n`,
-        "utf8",
+      );
+    },
+    async sendInvitationEmail({
+      auctionTitle,
+      link,
+      teamName,
+      to,
+    }: InvitationEmailMessage): Promise<void> {
+      const safeEmail = to.replace(/[^a-z0-9@.-]/gi, "_");
+      await write(
+        `${Date.now()}-invitation-${safeEmail}.txt`,
+        `To: ${to}\nType: invitation\nAuction: ${auctionTitle}\nTeam: ${teamName}\nLink: ${link}\n`,
       );
     },
   };

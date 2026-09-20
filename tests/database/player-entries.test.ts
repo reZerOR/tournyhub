@@ -200,8 +200,22 @@ describe("createPlayerEntry", () => {
     ).toEqual([]);
   });
 
-  it("returns null once the Auction is no longer a Draft", async () => {
+  it("returns null once the Auction is no longer editable", async () => {
     const { auctionId, organizerId } = await createAuction("create-ready");
+    await pool.query(
+      `update "auction" set "status" = 'completed' where "id" = $1`,
+      [auctionId],
+    );
+
+    expect(
+      await createPlayerEntry(pool, organizerId, auctionId, {
+        displayName: "Alice",
+      }),
+    ).toBeNull();
+  });
+
+  it("still edits a Ready Auction and returns it to Draft", async () => {
+    const { auctionId, organizerId } = await createAuction("create-ready-edit");
     await pool.query(
       `update "auction" set "status" = 'ready' where "id" = $1`,
       [auctionId],
@@ -211,7 +225,13 @@ describe("createPlayerEntry", () => {
       await createPlayerEntry(pool, organizerId, auctionId, {
         displayName: "Alice",
       }),
-    ).toBeNull();
+    ).not.toBeNull();
+
+    const status = await pool.query<{ status: string }>(
+      `select "status" from "auction" where "id" = $1`,
+      [auctionId],
+    );
+    expect(status.rows[0]!.status).toBe("draft");
   });
 });
 

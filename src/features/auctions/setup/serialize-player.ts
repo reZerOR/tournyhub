@@ -10,9 +10,11 @@ export interface SerializedPlayerEntry {
   displayName: string;
   externalPlayerId: null | string;
   id: string;
+  isRepresentative: boolean;
   phoneNumber: null | string;
   role: null | string;
   startingPriceOverride: null | number;
+  teamId: null | string;
 }
 
 export function serializeCustomPlayerField(
@@ -29,8 +31,10 @@ export function serializePlayerEntry(
     displayName: entry.displayName,
     externalPlayerId: entry.externalPlayerId,
     id: entry.id,
+    isRepresentative: entry.isRepresentative,
     phoneNumber: entry.phoneNumber,
     role: entry.role,
     startingPriceOverride: entry.startingPriceOverride,
+    teamId: entry.teamId,
   };
 }

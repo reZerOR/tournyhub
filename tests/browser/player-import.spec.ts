@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import type { APIRequestContext, Page } from "@playwright/test";
 import * as XLSX from "xlsx";
 

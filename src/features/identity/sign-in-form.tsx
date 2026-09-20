@@ -63,9 +63,11 @@ function oauthErrorMessage(error?: string): string | null {
 
 export function SignInForm({
   googleEnabled,
+  next,
   oauthError,
 }: {
   googleEnabled: boolean;
+  next?: string;
   oauthError?: string;
 }) {
   const router = useRouter();
@@ -135,7 +137,7 @@ export function SignInForm({
       return;
     }
 
-    router.push("/app");
+    router.push(next ?? "/app");
     router.refresh();
   }
 
@@ -143,7 +145,7 @@ export function SignInForm({
     setError(null);
     setIsSubmitting(true);
     const { error: googleError } = await authClient.signIn.social({
-      callbackURL: "/app",
+      callbackURL: next ?? "/app",
       errorCallbackURL: "/sign-in",
       provider: "google",
     });

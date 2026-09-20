@@ -8,7 +8,10 @@ import {
   type ImportTarget,
   type PlayerImportPreview,
 } from "@/domain/player-import";
-import { lockDraftAuction } from "@/server/auction-command/lock-draft-auction";
+import {
+  lockEditableAuction,
+  markAuctionDraft,
+} from "@/server/auction-command/lock-editable-auction";
 import {
   getCustomPlayerFieldsForOrganizer,
   getPlayerEntriesForOrganizer,
@@ -126,7 +129,7 @@ export async function commitPlayerImport(
   const client = await pool.connect();
   try {
     await client.query("begin");
-    if (!(await lockDraftAuction(client, organizerId, auctionId))) {
+    if (!(await lockEditableAuction(client, organizerId, auctionId))) {
       await client.query("rollback");
       return null;
     }
@@ -200,6 +203,7 @@ export async function commitPlayerImport(
         preview.warningCount,
       ],
     );
+    await markAuctionDraft(client, auctionId);
     await client.query("commit");
 
     return {

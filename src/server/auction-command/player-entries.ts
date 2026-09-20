@@ -1,6 +1,9 @@
 import type { Pool, PoolClient } from "pg";
 
-import { lockDraftAuction } from "@/server/auction-command/lock-draft-auction";
+import {
+  lockEditableAuction,
+  markAuctionDraft,
+} from "@/server/auction-command/lock-editable-auction";
 import {
   customPlayerFieldInputSchema,
   PLAYER_ENTRY_LIMITS,
@@ -36,9 +39,11 @@ interface PlayerEntryRow {
   display_name: string;
   external_player_id: null | string;
   id: string;
+  is_representative: boolean;
   phone_number: null | string;
   role: null | string;
   starting_price_override: null | number;
+  team_id: null | string;
   updated_at: Date;
 }
 
@@ -69,9 +74,11 @@ function mapPlayerEntryRow(
     displayName: row.display_name,
     externalPlayerId: row.external_player_id,
     id: row.id,
+    isRepresentative: row.is_representative,
     phoneNumber: row.phone_number,
     role: row.role,
     startingPriceOverride: row.starting_price_override,
+    teamId: row.team_id,
     updatedAt: row.updated_at,
   };
 }
@@ -174,7 +181,7 @@ export async function createPlayerEntry(
   const client = await pool.connect();
   try {
     await client.query("begin");
-    if (!(await lockDraftAuction(client, organizerId, auctionId))) {
+    if (!(await lockEditableAuction(client, organizerId, auctionId))) {
       await client.query("rollback");
       return null;
     }
@@ -218,6 +225,7 @@ export async function createPlayerEntry(
     const row = inserted.rows[0]!;
     await replaceCustomValues(client, row.id, entry.customValues);
     const values = await loadCustomValues(client, [row.id]);
+    await markAuctionDraft(client, auctionId);
     await client.query("commit");
     return mapPlayerEntryRow(row, values.get(row.id) ?? {});
   } catch (error) {
@@ -240,7 +248,7 @@ export async function updatePlayerEntry(
   const client = await pool.connect();
   try {
     await client.query("begin");
-    if (!(await lockDraftAuction(client, organizerId, auctionId))) {
+    if (!(await lockEditableAuction(client, organizerId, auctionId))) {
       await client.query("rollback");
       return null;
     }
@@ -289,6 +297,7 @@ export async function updatePlayerEntry(
     const row = updated.rows[0]!;
     await replaceCustomValues(client, row.id, entry.customValues);
     const values = await loadCustomValues(client, [row.id]);
+    await markAuctionDraft(client, auctionId);
     await client.query("commit");
     return mapPlayerEntryRow(row, values.get(row.id) ?? {});
   } catch (error) {
@@ -309,7 +318,7 @@ export async function deletePlayerEntry(
   const client = await pool.connect();
   try {
     await client.query("begin");
-    if (!(await lockDraftAuction(client, organizerId, auctionId))) {
+    if (!(await lockEditableAuction(client, organizerId, auctionId))) {
       await client.query("rollback");
       return false;
     }
@@ -318,6 +327,7 @@ export async function deletePlayerEntry(
       `delete from "player_entry" where "id" = $1 and "auction_id" = $2`,
       [playerEntryId, auctionId],
     );
+    await markAuctionDraft(client, auctionId);
     await client.query("commit");
     return deleted.rowCount === 1;
   } catch (error) {
@@ -339,7 +349,7 @@ export async function createCustomPlayerField(
   const client = await pool.connect();
   try {
     await client.query("begin");
-    if (!(await lockDraftAuction(client, organizerId, auctionId))) {
+    if (!(await lockEditableAuction(client, organizerId, auctionId))) {
       await client.query("rollback");
       return null;
     }
@@ -360,6 +370,7 @@ export async function createCustomPlayerField(
        returning *`,
       [auctionId, field.label],
     );
+    await markAuctionDraft(client, auctionId);
     await client.query("commit");
     return mapCustomPlayerFieldRow(inserted.rows[0]!);
   } catch (error) {
@@ -382,7 +393,7 @@ export async function updateCustomPlayerField(
   const client = await pool.connect();
   try {
     await client.query("begin");
-    if (!(await lockDraftAuction(client, organizerId, auctionId))) {
+    if (!(await lockEditableAuction(client, organizerId, auctionId))) {
       await client.query("rollback");
       return null;
     }
@@ -398,6 +409,7 @@ export async function updateCustomPlayerField(
       await client.query("rollback");
       return null;
     }
+    await markAuctionDraft(client, auctionId);
     await client.query("commit");
     return mapCustomPlayerFieldRow(updated.rows[0]!);
   } catch (error) {
@@ -418,7 +430,7 @@ export async function deleteCustomPlayerField(
   const client = await pool.connect();
   try {
     await client.query("begin");
-    if (!(await lockDraftAuction(client, organizerId, auctionId))) {
+    if (!(await lockEditableAuction(client, organizerId, auctionId))) {
       await client.query("rollback");
       return false;
     }
@@ -427,6 +439,7 @@ export async function deleteCustomPlayerField(
       `delete from "custom_player_field" where "id" = $1 and "auction_id" = $2`,
       [customPlayerFieldId, auctionId],
     );
+    await markAuctionDraft(client, auctionId);
     await client.query("commit");
     return deleted.rowCount === 1;
   } catch (error) {
