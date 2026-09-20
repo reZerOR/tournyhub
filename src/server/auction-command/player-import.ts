@@ -151,10 +151,18 @@ export async function commitPlayerImport(
       };
     }
 
-    const [fields, entries] = await Promise.all([
-      getCustomPlayerFieldsForOrganizer(client, organizerId, auctionId),
-      getPlayerEntriesForOrganizer(client, organizerId, auctionId),
-    ]);
+    // Sequential: these run on the transaction client, and PostgreSQL rejects
+    // two queries on one connection at the same time.
+    const fields = await getCustomPlayerFieldsForOrganizer(
+      client,
+      organizerId,
+      auctionId,
+    );
+    const entries = await getPlayerEntriesForOrganizer(
+      client,
+      organizerId,
+      auctionId,
+    );
     if (!fields || !entries) {
       await client.query("rollback");
       return null;

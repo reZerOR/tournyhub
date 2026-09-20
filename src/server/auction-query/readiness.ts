@@ -48,28 +48,28 @@ export async function loadReadinessInput(
   db: Queryable,
   auctionId: string,
 ): Promise<ReadinessInput> {
-  const [auctionResult, ruleSet, tiers, teamsResult, supplyResult] =
-    await Promise.all([
-      db.query<{ rules_mode: RulesMode }>(
-        `select "rules_mode" from "auction" where "id" = $1`,
-        [auctionId],
-      ),
-      loadRuleSet(db, auctionId),
-      loadTiers(db, auctionId),
-      db.query<TeamRow>(
-        `select * from "team"
-          where "auction_id" = $1
-          order by "position" asc, "created_at" asc, "id" asc`,
-        [auctionId],
-      ),
-      db.query<PlayerSupplyRow>(
-        `select "is_representative", "team_id", "tier_id",
-                "starting_price_override"
-           from "player_entry"
-          where "auction_id" = $1`,
-        [auctionId],
-      ),
-    ]);
+  // Sequential: this runs on the transaction client from `startAuction` and
+  // `syncAuctionReadiness`, and PostgreSQL rejects two queries on one
+  // connection at the same time.
+  const auctionResult = await db.query<{ rules_mode: RulesMode }>(
+    `select "rules_mode" from "auction" where "id" = $1`,
+    [auctionId],
+  );
+  const ruleSet = await loadRuleSet(db, auctionId);
+  const tiers = await loadTiers(db, auctionId);
+  const teamsResult = await db.query<TeamRow>(
+    `select * from "team"
+      where "auction_id" = $1
+      order by "position" asc, "created_at" asc, "id" asc`,
+    [auctionId],
+  );
+  const supplyResult = await db.query<PlayerSupplyRow>(
+    `select "is_representative", "team_id", "tier_id",
+            "starting_price_override"
+       from "player_entry"
+      where "auction_id" = $1`,
+    [auctionId],
+  );
 
   const rulesMode = auctionResult.rows[0]?.rules_mode ?? "simple";
   const defaultStartingPrice = ruleSet.defaultStartingPrice ?? 0;
