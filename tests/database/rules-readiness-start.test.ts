@@ -256,4 +256,55 @@ describe("startAuction", () => {
 
     expect(await startAuction(pool, organizerId, auctionId)).toBeNull();
   });
+
+  it("starts again when an interrupted start left only the frozen revision", async () => {
+    const { auctionId, organizerId } = await buildReadyAuction("start-restart");
+    await startAuction(pool, organizerId, auctionId);
+    // No Presentation, Bid, or Sale has happened, so returning to Draft and
+    // starting again simply re-freezes revision 1.
+    await pool.query(
+      `update "auction" set "status" = 'draft' where "id" = $1`,
+      [auctionId],
+    );
+    await syncAuctionReadiness(pool, organizerId, auctionId);
+
+    const restarted = await startAuction(pool, organizerId, auctionId);
+
+    expect(restarted).toMatchObject({ auctionId, revision: 1 });
+    const revisions = await pool.query<{ count: number }>(
+      `select count(*)::int as count from "auction_revision"
+        where "auction_id" = $1 and "revision" = 1`,
+      [auctionId],
+    );
+    expect(revisions.rows[0]!.count).toBe(1);
+  });
+
+  it("refuses to start an Auction that already has history, and says why", async () => {
+    const { auctionId, organizerId } = await buildReadyAuction("start-history");
+    await startAuction(pool, organizerId, auctionId);
+    // Simulate an out-of-band write that returns a played Auction to Draft,
+    // which the Auction Command module never does.
+    const player = await pool.query<{ id: string }>(
+      `select "id" from "player_entry"
+        where "auction_id" = $1 and not "is_representative"
+        order by "created_at" asc limit 1`,
+      [auctionId],
+    );
+    await pool.query(
+      `insert into "player_presentation"
+          ("auction_id", "player_entry_id", "starting_price", "selection_method",
+           "state", "close_mode")
+       values ($1, $2, 10, 'manual', 'open', 'manual')`,
+      [auctionId, player.rows[0]!.id],
+    );
+    await pool.query(
+      `update "auction" set "status" = 'draft' where "id" = $1`,
+      [auctionId],
+    );
+    await syncAuctionReadiness(pool, organizerId, auctionId);
+
+    await expect(startAuction(pool, organizerId, auctionId)).rejects.toThrow(
+      /already has history/,
+    );
+  });
 });

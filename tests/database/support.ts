@@ -77,13 +77,21 @@ export async function setAuctionStatus(
 }
 
 /**
- * The beta permits exactly one Live Auction across the service. Browser tests
- * and earlier database runs can leave one behind, so the Live suites reset the
- * running states before and after each test to start from a clean service.
+ * The beta permits exactly one Live Auction across the service. A test that
+ * leaves one running would block the next test, so the Live suites reset the
+ * running states before and after each case.
+ *
+ * Only Auctions owned by a test User are touched. An Auction belonging to a
+ * real Organizer must never be demoted by a test run, and scoping this to
+ * `TEST_EMAIL_PREFIX` is what keeps the local database safe to share.
  */
 export async function resetLiveAuctions(): Promise<void> {
   await pool.query(
-    `update "auction" set "status" = 'draft'
-      where "status" in ('live', 'paused')`,
+    `update "auction" a set "status" = 'draft'
+       from "user" u
+      where a."organizer_id" = u."id"
+        and u."email" like $1
+        and a."status" in ('live', 'paused')`,
+    [`${TEST_EMAIL_PREFIX}%`],
   );
 }

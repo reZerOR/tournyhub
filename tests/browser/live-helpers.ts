@@ -11,10 +11,17 @@ import {
   uniqueEmail,
 } from "./helpers";
 
+/** Every browser spec signs in with an email under this prefix. */
+export const BROWSER_EMAIL_PREFIX = "browser-";
+
 /**
- * The beta permits exactly one Live Auction across the whole service. A browser
- * test that leaves one running would block the next one, so every live spec
- * returns any leftover running Auction to Draft before it starts.
+ * The beta permits exactly one Live Auction across the whole service, so a
+ * spec that leaves one running would block the next one. Reset the running
+ * state before and after each live spec.
+ *
+ * Only Auctions owned by a browser-test User are touched: an Auction belonging
+ * to a real Organizer must never be demoted by a test run, and that is what
+ * keeps this suite safe to run against a database in use.
  */
 export async function resetRunningAuctions(): Promise<void> {
   const pool = new Pool({
@@ -24,8 +31,12 @@ export async function resetRunningAuctions(): Promise<void> {
   });
   try {
     await pool.query(
-      `update "auction" set "status" = 'draft'
-        where "status" in ('live', 'paused')`,
+      `update "auction" a set "status" = 'draft'
+         from "user" u
+        where a."organizer_id" = u."id"
+          and u."email" like $1
+          and a."status" in ('live', 'paused')`,
+      [`${BROWSER_EMAIL_PREFIX}%`],
     );
   } finally {
     await pool.end();

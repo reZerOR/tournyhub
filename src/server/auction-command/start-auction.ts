@@ -88,6 +88,25 @@ export async function startAuction(
       );
     }
 
+    // A Presentation, Bid, or Sale from an earlier run would corrupt the new
+    // one: the frozen Starting Prices, the offered queue, and every Team's
+    // Roster would disagree with history that already exists. An Auction only
+    // reaches this state through a write outside the Auction Command module, so
+    // report it instead of merging the two runs.
+    const history = await client.query<{ count: number }>(
+      `select (
+                (select count(*) from "player_presentation" where "auction_id" = $1)
+              + (select count(*) from "bid_attempt" where "auction_id" = $1)
+              + (select count(*) from "sale" where "auction_id" = $1)
+              )::int as count`,
+      [auctionId],
+    );
+    if ((history.rows[0]?.count ?? 0) > 0) {
+      throw new AuctionStartError(
+        "This Auction already has history from an earlier start. Its Presentations, Bids, and Sales cannot be reused, so create a new Auction to run it again.",
+      );
+    }
+
     const entries = await client.query<{
       id: string;
       display_name: string;
@@ -172,9 +191,13 @@ export async function startAuction(
       })),
     };
 
+    // Re-freezing revision 1 is safe here: the Auction has no history yet, so
+    // starting it again after an interrupted start simply replaces the snapshot.
     await client.query(
       `insert into "auction_revision" ("auction_id", "revision", "payload")
-       values ($1, 1, $2::jsonb)`,
+       values ($1, 1, $2::jsonb)
+       on conflict ("auction_id", "revision") do update
+         set "payload" = excluded."payload", "created_at" = now()`,
       [auctionId, JSON.stringify(payload)],
     );
     const activeTier = rulesMode === "tiered" ? (frozenTiers[0] ?? null) : null;
@@ -197,7 +220,10 @@ export async function startAuction(
     };
   } catch (error) {
     await client.query("rollback");
-    if (isUniqueViolation(error)) {
+    // Only the one-Live-Auction index means another Auction holds the slot. Any
+    // other unique violation has a different cause and must not be described as
+    // this one.
+    if (isUniqueViolation(error, "auction_single_live_key")) {
       throw new AuctionStartError(
         "Another Auction is already Live. The beta allows one Live Auction at a time.",
       );
