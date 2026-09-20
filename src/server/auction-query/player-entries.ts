@@ -2,6 +2,12 @@ import type { Pool } from "pg";
 
 import type { CustomPlayerField, PlayerEntry } from "@/domain/player-entry";
 
+/**
+ * A pool or a transaction client, so a command can reuse these authorized
+ * reads inside its own transaction rather than duplicating the queries.
+ */
+export type PlayerSetupQueryable = Pick<Pool, "query">;
+
 interface CustomPlayerFieldRow {
   auction_id: string;
   created_at: Date;
@@ -61,7 +67,7 @@ function mapPlayerEntryRow(
  * so a User cannot confirm another User's Auction exists by its id.
  */
 async function isEditableDraftAuction(
-  pool: Pool,
+  pool: PlayerSetupQueryable,
   organizerId: string,
   auctionId: string,
 ): Promise<boolean> {
@@ -75,7 +81,7 @@ async function isEditableDraftAuction(
 
 /** This Auction's Custom Player Field definitions, or null when it is not an editable Draft for this Organizer. */
 export async function getCustomPlayerFieldsForOrganizer(
-  pool: Pool,
+  pool: PlayerSetupQueryable,
   organizerId: string,
   auctionId: string,
 ): Promise<CustomPlayerField[] | null> {
@@ -94,7 +100,7 @@ export async function getCustomPlayerFieldsForOrganizer(
 
 /** This Auction's Player Entries with their custom values, or null when it is not an editable Draft for this Organizer. */
 export async function getPlayerEntriesForOrganizer(
-  pool: Pool,
+  pool: PlayerSetupQueryable,
   organizerId: string,
   auctionId: string,
 ): Promise<PlayerEntry[] | null> {

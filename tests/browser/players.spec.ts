@@ -74,6 +74,9 @@ test("an Organizer manages Player Entries, custom fields, and duplicate warnings
   await addForm.getByLabel("Display name").fill("Alice");
   await addForm.getByRole("button", { name: "Add Player" }).click();
   await expect(table.getByRole("row")).toHaveCount(2);
+  // Saving resets the add form to empty; wait for that reset before the next
+  // fill, otherwise the reset lands after it and clears the new values.
+  await expect(addForm.getByLabel("Display name")).toHaveValue("");
 
   await addForm.getByLabel("Display name").fill("Bob");
   await addForm.getByLabel("Role").fill("Captain");

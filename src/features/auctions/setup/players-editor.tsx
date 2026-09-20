@@ -30,9 +30,11 @@ import {
   createPlayerEntryAction,
   deleteCustomPlayerFieldAction,
   deletePlayerEntryAction,
+  loadPlayerSetupAction,
   updateCustomPlayerFieldAction,
   updatePlayerEntryAction,
 } from "@/features/auctions/setup/player-actions";
+import { PlayerImport } from "@/features/auctions/setup/player-import";
 import type {
   SerializedCustomPlayerField,
   SerializedPlayerEntry,
@@ -395,6 +397,13 @@ export function PlayersEditor({
     }
   }
 
+  async function reloadSetup() {
+    const snapshot = await loadPlayerSetupAction(auctionId);
+    if (!snapshot) return;
+    setCustomFields(snapshot.customFields);
+    setEntries(snapshot.entries);
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -680,6 +689,8 @@ export function PlayersEditor({
           </table>
         </CardContent>
       </Card>
+
+      <PlayerImport auctionId={auctionId} onImported={reloadSetup} />
     </div>
   );
 }

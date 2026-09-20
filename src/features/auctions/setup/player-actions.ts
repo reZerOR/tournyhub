@@ -21,6 +21,10 @@ import {
   updateCustomPlayerField,
   updatePlayerEntry,
 } from "@/server/auction-command/player-entries";
+import {
+  getCustomPlayerFieldsForOrganizer,
+  getPlayerEntriesForOrganizer,
+} from "@/server/auction-query/player-entries";
 import { getCurrentSession } from "@/server/auth/session";
 import { getPool } from "@/server/database/pool";
 
@@ -36,6 +40,34 @@ export type CustomPlayerFieldResult =
   ActionError | { field: SerializedCustomPlayerField; status: "saved" };
 
 export type RemovedResult = ActionError | { status: "saved" };
+
+export interface PlayerSetupSnapshot {
+  customFields: SerializedCustomPlayerField[];
+  entries: SerializedPlayerEntry[];
+}
+
+/**
+ * Reloads the whole Player setup after an import, which writes rows outside
+ * the editor's own state.
+ */
+export async function loadPlayerSetupAction(
+  auctionId: string,
+): Promise<null | PlayerSetupSnapshot> {
+  const session = await getCurrentSession();
+  if (!session) return null;
+
+  const pool = getPool();
+  const [fields, entries] = await Promise.all([
+    getCustomPlayerFieldsForOrganizer(pool, session.user.id, auctionId),
+    getPlayerEntriesForOrganizer(pool, session.user.id, auctionId),
+  ]);
+  if (!fields || !entries) return null;
+
+  return {
+    customFields: fields.map(serializeCustomPlayerField),
+    entries: entries.map(serializePlayerEntry),
+  };
+}
 
 function toError(error: unknown): ActionError {
   if (error instanceof z.ZodError) {
