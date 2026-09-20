@@ -149,4 +149,46 @@ describe("evaluateReadiness under Tiered Rules", () => {
 
     expect(groups(readiness)).toContain("tiers");
   });
+
+  it("accepts Tier maximums that reach the Roster minimum with a preassigned representative", () => {
+    // Tier max 3 is below the Roster minimum 4, but each Team already holds one
+    // representative outside every Tier, so the minimum stays reachable.
+    const readiness = evaluateReadiness(
+      input({
+        players: Array.from({ length: 6 }, () => ({
+          startingPrice: 10,
+          tierId: "tier-all",
+        })),
+        ruleSet: ruleSet({ rosterMax: 6, rosterMin: 4 }),
+        teams: [
+          {
+            id: "t1",
+            name: "Reds",
+            preassignedByTier: {},
+            preassignedCount: 1,
+            representativeUserId: "u1",
+          },
+          {
+            id: "t2",
+            name: "Blues",
+            preassignedByTier: {},
+            preassignedCount: 1,
+            representativeUserId: "u2",
+          },
+        ],
+        tiers: [
+          {
+            id: "tier-all",
+            label: "All",
+            maxPerTeam: 3,
+            minPerTeam: 0,
+            position: 0,
+            startingPrice: 10,
+          },
+        ],
+      }),
+    );
+
+    expect(readiness.ready).toBe(true);
+  });
 });

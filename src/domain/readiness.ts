@@ -100,6 +100,9 @@ export function tieredFeasibilityIssues(
     preassignedByTier: tiers.map(
       (tier) => team.preassignedByTier?.[tier.id] ?? 0,
     ),
+    // Player Representatives may have no Tier, so the caller supplies the true
+    // Roster total rather than letting it be inferred from the per-Tier counts.
+    preassignedTotal: team.preassignedCount,
     spent: 0,
   }));
 
@@ -333,12 +336,18 @@ function evaluateTieredReadiness({
           "Tier minimums ask for more Players than the maximum Roster size.",
       });
     }
-    if (sumTierMaximums(tiers) < ruleSet.rosterMin) {
+    const tierMaximumSum = sumTierMaximums(tiers);
+    // A Team also holds its preassigned Player Representatives, which may sit
+    // outside every Tier, so they count toward whether the minimum is reachable.
+    const teamsBelowMinimum = input.teams.filter(
+      (team) => team.preassignedCount + tierMaximumSum < ruleSet.rosterMin,
+    );
+    if (teamsBelowMinimum.length > 0) {
       errors.push({
         group: "tiers",
         href: setupHref(auctionId, "tiers"),
         message:
-          "Tier maximums cannot reach the minimum Roster size for a Team.",
+          "Tier maximums plus preassigned Players cannot reach the minimum Roster size for a Team.",
       });
     }
     for (const tier of tiers) {

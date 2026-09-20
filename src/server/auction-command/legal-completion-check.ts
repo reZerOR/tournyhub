@@ -168,6 +168,9 @@ export async function bidKeepsLegalCompletion(
         const base = reps?.byTier.get(tier.id) ?? 0;
         return base + (isBidding && tier.id === playerTierId ? 1 : 0);
       }),
+      // The representative total includes any Player Representative with no
+      // Tier, which the per-Tier counts cannot express.
+      preassignedTotal: (reps?.total ?? 0) + (isBidding ? 1 : 0),
       spent: team.spent + (isBidding ? amount : 0),
     };
   });

@@ -11,7 +11,11 @@ function tier(minPerTeam: number, maxPerTeam: number, label = "T") {
 
 function team(
   preassignedByTier: number[],
-  overrides: Partial<{ budget: number; spent: number }> = {},
+  overrides: Partial<{
+    budget: number;
+    preassignedTotal: number;
+    spent: number;
+  }> = {},
 ) {
   return { budget: 100, preassignedByTier, spent: 0, ...overrides };
 }
@@ -91,6 +95,37 @@ describe("evaluateTieredCompletion", () => {
     // The cheapest Gold Player costs 100 Credits; the Team has only 50.
     expect(result.reason).toContain("100");
     expect(result.reason).toContain("50");
+  });
+
+  it("counts a Player Representative with no Tier toward the Roster minimum", () => {
+    // Each Team already holds one representative outside every Tier, so it
+    // needs only 3 more; the Tier maximums (1 + 2) exactly cover that. The
+    // representative must therefore count toward the total, or the engine
+    // wrongly demands 4 acquisitions from Tiers that allow only 3.
+    const input = {
+      players: [
+        ...Array.from({ length: 4 }, () => player(1000, 0)),
+        ...Array.from({ length: 8 }, () => player(800, 1)),
+      ],
+      rosterMax: 6,
+      rosterMin: 4,
+      teams: Array.from({ length: 4 }, () =>
+        team([0, 0], { budget: 10000, preassignedTotal: 1 }),
+      ),
+      tiers: [tier(0, 1, "A"), tier(0, 2, "B")],
+    };
+
+    expect(evaluateTieredCompletion(input)).toEqual({
+      possible: true,
+      reason: null,
+    });
+    // Without the representative counted, the same pool is impossible, which
+    // is exactly the false negative this test guards against.
+    const withoutRep = {
+      ...input,
+      teams: Array.from({ length: 4 }, () => team([0, 0], { budget: 10000 })),
+    };
+    expect(evaluateTieredCompletion(withoutRep).possible).toBe(false);
   });
 
   it("spreads expensive Tiers to the Team that can afford them", () => {

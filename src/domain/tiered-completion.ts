@@ -33,6 +33,12 @@ export interface TieredCompletionTeam {
   budget: number;
   /** Players already on this Team's Roster per Tier, such as Player Representatives. */
   preassignedByTier: readonly number[];
+  /**
+   * Every Player already on this Team's Roster, including any that belongs to
+   * no Tier (a Player Representative may be left without one). Defaults to the
+   * sum of `preassignedByTier`, which is wrong when such a Player exists.
+   */
+  preassignedTotal?: number;
   /** Credits already committed by this Team. */
   spent: number;
 }
@@ -95,10 +101,12 @@ function prepare(
 
   const states: TeamState[] = [];
   for (const team of teams) {
-    const preassignedTotal = team.preassignedByTier.reduce(
-      (total, count) => total + count,
-      0,
-    );
+    // A Player Representative without a Tier still occupies a Roster place, so
+    // the total comes from the caller when given and only falls back to the
+    // per-Tier sum otherwise.
+    const preassignedTotal =
+      team.preassignedTotal ??
+      team.preassignedByTier.reduce((total, count) => total + count, 0);
     const totalCapacity = rosterMax - preassignedTotal;
     if (totalCapacity < 0) {
       return {

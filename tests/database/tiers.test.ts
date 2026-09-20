@@ -405,4 +405,79 @@ describe("Tiered readiness and start", () => {
       /Readiness/,
     );
   });
+
+  it("starts when Tier-less Player Representatives count toward the Roster minimum", async () => {
+    const organizerId = await createTestUser("tiered-tierless-rep");
+    const auction = await createTestAuction(organizerId, {
+      rulesMode: "tiered",
+    });
+    const auctionId = auction.id;
+
+    const teams = [];
+    for (const name of ["team a", "team b", "team c", "team d"]) {
+      teams.push(await createTeam(pool, organizerId, auctionId, { name }));
+    }
+
+    const tierA = await createTier(pool, organizerId, auctionId, {
+      label: "Tier a",
+      maxPerTeam: 1,
+      minPerTeam: 0,
+      startingPrice: 1000,
+    });
+    const tierB = await createTier(pool, organizerId, auctionId, {
+      label: "tier b",
+      maxPerTeam: 2,
+      minPerTeam: 0,
+      startingPrice: 800,
+    });
+
+    // Player Representatives with no Tier: they occupy a Roster place but no
+    // Tier count, which is the case the engine previously dropped.
+    for (const [index, team] of teams.entries()) {
+      const rep = await createPlayerEntry(pool, organizerId, auctionId, {
+        displayName: `Rep ${index + 1}`,
+      });
+      await assignPlayerRepresentative(pool, organizerId, auctionId, {
+        email: await registerRep(`tierless-rep-${index + 1}`),
+        playerEntryId: rep!.id,
+        teamId: team!.id,
+      });
+    }
+
+    for (let index = 0; index < 4; index += 1) {
+      const entry = await createPlayerEntry(pool, organizerId, auctionId, {
+        displayName: `A ${index + 1}`,
+      });
+      await assignPlayerTier(
+        pool,
+        organizerId,
+        auctionId,
+        entry!.id,
+        tierA!.id,
+      );
+    }
+    for (let index = 0; index < 8; index += 1) {
+      const entry = await createPlayerEntry(pool, organizerId, auctionId, {
+        displayName: `B ${index + 1}`,
+      });
+      await assignPlayerTier(
+        pool,
+        organizerId,
+        auctionId,
+        entry!.id,
+        tierB!.id,
+      );
+    }
+
+    await saveTieredRules(pool, organizerId, auctionId, {
+      bidIncrement: 100,
+      budget: 10_000,
+      rosterMax: 6,
+      rosterMin: 4,
+    });
+
+    const readiness = await syncAuctionReadiness(pool, organizerId, auctionId);
+    expect(readiness?.ready).toBe(true);
+    expect(await startAuction(pool, organizerId, auctionId)).not.toBeNull();
+  });
 });
