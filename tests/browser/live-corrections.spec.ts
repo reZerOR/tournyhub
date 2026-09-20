@@ -7,6 +7,9 @@ import {
 } from "./live-helpers";
 
 test.beforeEach(resetRunningAuctions);
+// Leave the service clean: the beta allows only one Live Auction, and a spec
+// that ends mid-auction would block the next run.
+test.afterAll(resetRunningAuctions);
 
 test("cancels the highest Bid while Paused and restores the preceding leader", async ({
   browser,

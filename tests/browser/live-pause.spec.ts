@@ -7,6 +7,9 @@ import {
 } from "./live-helpers";
 
 test.beforeEach(resetRunningAuctions);
+// Leave the service clean: the beta allows only one Live Auction, and a spec
+// that ends mid-auction would block the next run.
+test.afterAll(resetRunningAuctions);
 
 test("pauses and resumes a Live Auction without losing the Active Player", async ({
   browser,
