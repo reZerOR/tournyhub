@@ -194,6 +194,28 @@ function prepare(
     }
   }
 
+  // A Team can never pay less than the cheapest Players it still needs to meet
+  // its Tier minimums, so a Budget below that lower bound is impossible however
+  // the Players are shared. Reporting the shortfall makes a vague "no Legal
+  // Completion" actionable.
+  for (const state of states) {
+    if (state.requiredTotal === 0) continue;
+    let lowerBound = 0;
+    for (let tierIndex = 0; tierIndex < tierCount; tierIndex += 1) {
+      const needed = state.requiredTier[tierIndex]!;
+      const prices = perTier[tierIndex]!;
+      for (let index = 0; index < needed; index += 1) {
+        lowerBound += prices[index] ?? 0;
+      }
+    }
+    if (lowerBound > state.budget) {
+      return {
+        possible: false,
+        reason: `A Team cannot afford the cheapest Players it still needs: at least ${lowerBound} Credits are required for its remaining Tier minimums, but only ${state.budget} Credit${state.budget === 1 ? "" : "s"} remain in its Budget. Raise the Budget or lower the Tier Starting Prices.`,
+      };
+    }
+  }
+
   return { candidates, teams: states };
 }
 

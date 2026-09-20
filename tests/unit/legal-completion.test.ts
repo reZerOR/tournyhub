@@ -50,6 +50,20 @@ describe("evaluateLegalCompletion", () => {
     expect(result.reason).toContain("afford");
   });
 
+  it("names the Credits shortfall so the Organizer can act on it", () => {
+    const result = evaluateLegalCompletion({
+      players: players(10, 10, 10, 10),
+      rosterMax: 4,
+      rosterMin: 2,
+      teams: [team({ budget: 15 }), team({ budget: 100 })],
+    });
+
+    expect(result.possible).toBe(false);
+    // The two cheapest Players cost 20 Credits; the Team has only 15.
+    expect(result.reason).toContain("20");
+    expect(result.reason).toContain("15");
+  });
+
   it("gives the cheapest Players to the most Budget-constrained Team", () => {
     const result = evaluateLegalCompletion({
       players: players(1, 9),

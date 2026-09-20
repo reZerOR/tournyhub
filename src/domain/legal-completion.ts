@@ -119,6 +119,23 @@ function prepare(
     .sort((left, right) => left - right)
     .slice(0, requiredTotal);
 
+  // A Team can never pay less than the cheapest Players it still needs, so a
+  // Budget below that lower bound is impossible however the Players are shared.
+  // Reporting the shortfall here turns a vague "no Legal Completion" into a
+  // number the Organizer can act on.
+  for (const demand of demands) {
+    if (demand.demand === 0) continue;
+    const lowerBound = chosen
+      .slice(0, demand.demand)
+      .reduce((total, price) => total + price, 0);
+    if (lowerBound > demand.budget) {
+      return {
+        possible: false,
+        reason: `A Team cannot afford the cheapest Players it still needs: at least ${lowerBound} Credits are required for its remaining ${demand.demand} Player${demand.demand === 1 ? "" : "s"}, but only ${demand.budget} Credit${demand.budget === 1 ? "" : "s"} remain in its Budget. Raise the Budget or lower the Starting Prices.`,
+      };
+    }
+  }
+
   return { chosen, required: requiredTotal, teams: demands };
 }
 

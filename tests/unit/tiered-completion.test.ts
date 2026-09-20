@@ -80,14 +80,17 @@ describe("evaluateTieredCompletion", () => {
 
   it("rejects a Tier minimum a Team cannot afford within Budget", () => {
     const result = evaluateTieredCompletion({
-      players: [player(100, 1), player(100, 1)],
+      players: [player(100, 0), player(100, 0)],
       rosterMax: 3,
       rosterMin: 1,
-      teams: [team([0, 0], { budget: 50 }), team([0, 0], { budget: 50 })],
+      teams: [team([0], { budget: 50 }), team([0], { budget: 50 })],
       tiers: [tier(1, 1, "Gold")],
     });
 
     expect(result.possible).toBe(false);
+    // The cheapest Gold Player costs 100 Credits; the Team has only 50.
+    expect(result.reason).toContain("100");
+    expect(result.reason).toContain("50");
   });
 
   it("spreads expensive Tiers to the Team that can afford them", () => {
