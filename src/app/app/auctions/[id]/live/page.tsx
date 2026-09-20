@@ -24,6 +24,7 @@ export default async function LiveAuctionPage({
       <LiveConsole
         auctionId={id}
         initialSnapshot={access.snapshot}
+        initialSoundEnabled={session.user.soundEnabled === true}
         role={access.role}
       />
     </div>

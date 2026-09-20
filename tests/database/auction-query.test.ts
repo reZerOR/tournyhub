@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 
+import { archiveAuction } from "@/server/auction-command/archive";
 import { createDraftAuction } from "@/server/auction-command/auction-command";
 import {
   getArchivedAuctions,
@@ -42,10 +43,9 @@ describe("getOrganizerAuctions and getArchivedAuctions", () => {
 
     const ownAuction = await createDraftAuction(pool, organizerId, basics);
     await createDraftAuction(pool, otherOrganizerId, basics);
-    await pool.query(
-      `update "auction" set "status" = 'archived' where "id" = $1`,
-      [ownAuction.id],
-    );
+    // Archiving goes through the real command, which is the only path that
+    // records the previous state and the recovery deadline.
+    await archiveAuction(pool, organizerId, ownAuction.id);
     const activeAuction = await createDraftAuction(pool, organizerId, {
       ...basics,
       title: "Spring Classic",

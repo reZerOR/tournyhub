@@ -34,7 +34,7 @@ function mapRow(row: AuctionRow): Auction {
   };
 }
 
-/** Every non-archived Auction this User organizes, for the dashboard. */
+/** Every non-archived, un-hidden Auction this User organizes, for the dashboard. */
 export async function getOrganizerAuctions(
   pool: Pool,
   organizerId: string,
@@ -42,13 +42,14 @@ export async function getOrganizerAuctions(
   const result = await pool.query<AuctionRow>(
     `select * from "auction"
       where "organizer_id" = $1 and "status" <> 'archived'
+        and "hidden_at" is null
       order by "updated_at" desc`,
     [organizerId],
   );
   return result.rows.map(mapRow);
 }
 
-/** This User's Archived Auctions, for the dashboard. */
+/** This User's Archived, un-hidden Auctions, for the dashboard. */
 export async function getArchivedAuctions(
   pool: Pool,
   organizerId: string,
@@ -56,13 +57,14 @@ export async function getArchivedAuctions(
   const result = await pool.query<AuctionRow>(
     `select * from "auction"
       where "organizer_id" = $1 and "status" = 'archived'
+        and "hidden_at" is null
       order by "updated_at" desc`,
     [organizerId],
   );
   return result.rows.map(mapRow);
 }
 
-/** Every non-archived Auction this User currently represents a Team in. */
+/** Every non-archived, un-hidden Auction this User currently represents a Team in. */
 export async function getRepresentedAuctions(
   pool: Pool,
   userId: string,
@@ -72,6 +74,7 @@ export async function getRepresentedAuctions(
        join "team" t on t."auction_id" = a."id"
       where t."representative_user_id" = $1
         and a."status" <> 'archived'
+        and a."hidden_at" is null
       order by a."updated_at" desc`,
     [userId],
   );
@@ -90,7 +93,8 @@ export async function getDraftAuctionForOrganizer(
 ): Promise<Auction | null> {
   const result = await pool.query<AuctionRow>(
     `select * from "auction"
-      where "id" = $1 and "organizer_id" = $2 and "status" = 'draft'`,
+      where "id" = $1 and "organizer_id" = $2 and "status" = 'draft'
+        and "hidden_at" is null`,
     [auctionId, organizerId],
   );
   return result.rows[0] ? mapRow(result.rows[0]) : null;
@@ -107,7 +111,8 @@ export async function getEditableAuctionForOrganizer(
 ): Promise<Auction | null> {
   const result = await pool.query<AuctionRow>(
     `select * from "auction"
-      where "id" = $1 and "organizer_id" = $2 and "status" in ('draft', 'ready')`,
+      where "id" = $1 and "organizer_id" = $2 and "status" in ('draft', 'ready')
+        and "hidden_at" is null`,
     [auctionId, organizerId],
   );
   return result.rows[0] ? mapRow(result.rows[0]) : null;

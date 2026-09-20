@@ -31,9 +31,13 @@ async function createRealOrganizerAuction(status: string): Promise<string> {
 
 afterEach(async () => {
   // Cancel rather than delete so no Live Auction is left holding the beta's
-  // single slot for the next test file.
+  // single slot for the next test file. A Cancelled Auction records when and
+  // why, which the database enforces.
   await pool.query(
-    `update "auction" a set "status" = 'cancelled'
+    `update "auction" a
+        set "status" = 'cancelled',
+            "cancelled_at" = now(),
+            "cancelled_reason" = 'Test cleanup'
        from "user" u
       where a."organizer_id" = u."id" and u."email" like $1`,
     [`${REAL_EMAIL_PREFIX}%`],

@@ -126,5 +126,30 @@
   }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
+  }
+  /*
+    Keyboard focus stays visible everywhere, including on links and controls
+    that rely on a component ring.
+  */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  /*
+    A User who prefers reduced motion gets no essential information from
+    animation, so every transition and animation is reduced to a single frame.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

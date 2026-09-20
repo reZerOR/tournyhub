@@ -86,6 +86,7 @@ export async function getTeamLogoKeyForUser(
        from "team" t
        join "auction" a on a."id" = t."auction_id"
       where t."id" = $1 and t."auction_id" = $2
+        and a."hidden_at" is null
         and (a."organizer_id" = $3 or t."representative_user_id" = $3)`,
     [teamId, auctionId, userId],
   );

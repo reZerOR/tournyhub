@@ -44,7 +44,7 @@ export async function getInvitationForToken(
        from "team_invitation" ti
        join "auction" a on a."id" = ti."auction_id"
        join "team" t on t."id" = ti."team_id"
-      where ti."token_digest" = $1`,
+      where ti."token_digest" = $1 and a."hidden_at" is null`,
     [digestInvitationToken(token)],
   );
   const row = result.rows[0];

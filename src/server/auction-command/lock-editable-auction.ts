@@ -22,6 +22,7 @@ export async function lockEditableAuction(
   const result = await client.query<{ status: AuctionStatus }>(
     `select "status" from "auction"
       where "id" = $1 and "organizer_id" = $2 and "status" in ('draft', 'ready')
+        and "hidden_at" is null
       for update`,
     [auctionId, organizerId],
   );

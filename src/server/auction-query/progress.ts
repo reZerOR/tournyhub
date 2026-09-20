@@ -124,6 +124,24 @@ export async function loadTierProgress(
 }
 
 /**
+ * The Tiers that have been opened: a Player in them has been presented at
+ * least once, whatever the Presentation's current state. Once a Tier is opened
+ * its Player pool is stable, so no Player may be added to it after the Auction
+ * starts.
+ */
+export async function loadOpenedTierIds(
+  db: Queryable,
+  auctionId: string,
+): Promise<Set<string>> {
+  const result = await db.query<{ tier_id: string }>(
+    `select distinct "tier_id" from "player_presentation"
+      where "auction_id" = $1 and "tier_id" is not null`,
+    [auctionId],
+  );
+  return new Set(result.rows.map((row) => row.tier_id));
+}
+
+/**
  * The biddable Players that have not been completed at all: no Sale, no Unsold
  * result, and no currently Active Presentation. Simple Rules use this as their
  * whole offering queue.

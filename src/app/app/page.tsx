@@ -12,17 +12,26 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import type { Auction } from "@/domain/auction";
+import { RestoreAuctionButton } from "@/features/auctions/lifecycle/restore-auction-button";
 import {
-  getArchivedAuctions,
   getOrganizerAuctions,
   getRepresentedAuctions,
 } from "@/server/auction-query/auction-query";
+import { getArchivedAuctionViewsForOrganizer } from "@/server/auction-query/lifecycle";
+import { purgeExpiredArchivedAuctions } from "@/server/auction-command/archive";
 import { getCurrentSession } from "@/server/auth/session";
 import { getPool } from "@/server/database/pool";
 
 function auctionHref(auction: Auction): string {
   if (auction.status === "live" || auction.status === "paused") {
     return `/app/auctions/${auction.id}/live`;
+  }
+  if (
+    auction.status === "completed" ||
+    auction.status === "cancelled" ||
+    auction.status === "archived"
+  ) {
+    return `/app/auctions/${auction.id}/results`;
   }
   return `/app/auctions/${auction.id}/setup/basics`;
 }
@@ -66,11 +75,17 @@ export default async function DashboardPage() {
   if (!session) redirect("/sign-in");
 
   const pool = getPool();
+  // Opportunistic retention: an Archived Auction whose seven-day recovery
+  // window has closed is permanently deleted the next time this dashboard
+  // loads. Nothing reminds the Organizer, matching the first version's simple
+  // retention rule, and an Auction restored in time is never touched.
+  await purgeExpiredArchivedAuctions(pool);
+
   const [organizedAuctions, representedAuctions, archivedAuctions] =
     await Promise.all([
       getOrganizerAuctions(pool, session.user.id),
       getRepresentedAuctions(pool, session.user.id),
-      getArchivedAuctions(pool, session.user.id),
+      getArchivedAuctionViewsForOrganizer(pool, session.user.id),
     ]);
 
   return (
@@ -159,7 +174,28 @@ export default async function DashboardPage() {
               You have no Archived Auctions.
             </p>
           ) : (
-            <AuctionList auctions={archivedAuctions} />
+            <div className="flex flex-col">
+              {archivedAuctions.map((view, index) => (
+                <div key={view.auction.id}>
+                  {index > 0 && <Separator />}
+                  <div className="flex items-center justify-between gap-4 py-4">
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <span className="font-medium">
+                        {view.auction.title || "Untitled Auction"}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        Was {view.previousStatus} · recoverable until{" "}
+                        {view.archiveDeadline.toLocaleDateString()}
+                      </span>
+                    </div>
+                    <RestoreAuctionButton
+                      auctionId={view.auction.id}
+                      label={`Restore ${view.auction.title}`}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

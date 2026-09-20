@@ -116,7 +116,7 @@ export async function resolveLiveRole(
             (select t."id" from "team" t
               where t."auction_id" = a."id" and t."representative_user_id" = $2
               limit 1) as team_id
-       from "auction" a where a."id" = $1`,
+       from "auction" a where a."id" = $1 and a."hidden_at" is null`,
     [auctionId, userId],
   );
   const row = result.rows[0];
@@ -147,7 +147,7 @@ export async function getLiveSnapshot(
   const auctionResult = await db.query<AuctionRow>(
     `select "organizer_id", "status", "revision", "rules_mode", "close_mode",
             "active_tier_id"
-       from "auction" where "id" = $1`,
+       from "auction" where "id" = $1 and "hidden_at" is null`,
     [auctionId],
   );
   const auction = auctionResult.rows[0];

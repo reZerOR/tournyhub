@@ -38,6 +38,11 @@ The startup validator requires these variables:
 | `SUPABASE_SERVICE_ROLE_KEY`            | Privileged Supabase server access                               | Server-only  |
 | `BETTER_AUTH_SECRET`                   | High-entropy secret Better Auth uses to sign sessions           | Server-only  |
 
+Set `APP_ENVIRONMENT` to `development`, `preview`, or `production`, and declare
+`PRODUCTION_DATABASE_URL` in every environment. A Preview deployment that points
+at the production database is rejected at startup, and so is a Preview
+deployment holding `PLATFORM_ADMIN_BOOTSTRAP_EMAIL`.
+
 Validation reports variable names and corrective steps without printing configured values. The checked-in example contains local placeholders, not production credentials.
 
 `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASSWORD` are optional. Without them, sign-in emails are written to the gitignored `.dev-emails/` directory instead of being sent, which is sufficient for local development.
@@ -70,6 +75,30 @@ Use `pnpm db:stop` when finished. `pnpm db:reset` recreates the local database a
 | `pnpm test:db`      | Run database tests against `DATABASE_URL`          |
 | `pnpm test:browser` | Run Playwright in Chromium                         |
 | `pnpm check`        | Run the complete local validation sequence         |
+
+## Operations
+
+| Command                | Purpose                                                                   |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `pnpm migrate:status`  | Compare migration files with the applied history and fail on drift        |
+| `pnpm admin:bootstrap` | Provision the first Platform Administrator, once                          |
+| `pnpm backup`          | Create a backup, its metadata, and a Storage manifest outside the project |
+| `pnpm restore`         | Restore an artifact into a separate non-production project                |
+| `pnpm setup:wizard`    | Walk through the provider steps that cannot be automated                  |
+| `pnpm rehearsal:bid`   | Measure committed Bid latency for the capacity gate                       |
+| `pnpm launch:gates`    | Run the automated gates and report the operator gates                     |
+
+`GET /api/health` reports the application, database, authentication, and
+Realtime dependencies as names and statuses only, so it is safe to call without
+authentication. Every response carries a Content Security Policy, framing,
+MIME-sniffing, referrer, and permissions policy.
+
+## Beta limits
+
+The beta allows one Live Auction at a time, recommends 16 Teams and supports at
+most 32, caps an Auction at 2,000 Player Entries, and caps connected browser
+tabs at 40. It is a personal, non-commercial beta with no availability SLA. See
+[the beta launch checklist](docs/beta-launch-checklist.md).
 
 Install the browser once, start and migrate the local database, then run all checks:
 

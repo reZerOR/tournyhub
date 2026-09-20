@@ -2,7 +2,33 @@
 
 Status: Confirmed
 
-This runbook describes the intended operator process. The implementation must supply the referenced validation, migration, backup, and restore scripts before launch. Exact dashboard labels and commands should be verified against current provider documentation when those scripts are built.
+This runbook describes the intended operator process. Exact dashboard labels and
+commands should be verified against current provider documentation when those
+scripts are built.
+
+## Implemented tooling
+
+The application supplies the scripts this runbook refers to:
+
+| Step | Command |
+| --- | --- |
+| Interactive provider setup | `pnpm setup:wizard` |
+| Environment validation | `pnpm env:check` |
+| Migration status, failing on drift | `pnpm migrate:status` |
+| Logical backup, metadata, Storage manifest | `pnpm backup --destination "<absolute path outside the project>"` |
+| Restore into a separate project | `pnpm restore --artifact "<artifact>" --database-url "<target>"` |
+| First Platform Administrator, once | `pnpm admin:bootstrap` |
+| Health check | `GET /api/health` |
+| Bid latency rehearsal | `pnpm rehearsal:bid -- --teams 16 --tabs 40` |
+| Launch gates | `pnpm launch:gates` |
+
+`pnpm backup` writes the artifact, its `.json` metadata, and the Storage
+manifest summary; it refuses to overwrite an artifact and never prints a
+credential. `pnpm restore` verifies the artifact checksum before touching the
+target and refuses the production database unless `--allow-production` is
+passed deliberately. Bootstrap refuses to run once any administrator exists, so
+`PLATFORM_ADMIN_BOOTSTRAP_EMAIL` must be removed after the first use.
+
 
 ## Service inventory
 

@@ -108,7 +108,13 @@ test("an unrelated User cannot open another Organizer's Draft Auction", async ({
 
   await page.context().clearCookies();
   await signIn(page, uniqueEmail("unrelated"));
-  const response = await page.goto(draftUrl);
+  await page.goto(draftUrl);
 
-  expect(response?.status()).toBe(404);
+  // A streaming route sends its headers before the page decides the Auction is
+  // not visible, so the privacy guarantee is the content, not the status: the
+  // unrelated User gets the not-found page and never the Draft's title.
+  await expect(
+    page.getByRole("heading", { name: "This page is not available" }),
+  ).toBeVisible();
+  await expect(page.getByText("Private Draft")).toBeHidden();
 });

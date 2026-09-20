@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,17 @@ import {
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import type { LiveSnapshot } from "@/domain/live";
+import { authClient } from "@/features/identity/auth-client";
+import {
+  describeLiveChange,
+  LIVE_SHORTCUTS,
+  shortcutActionFor,
+  soundCueFor,
+  type LiveShortcutAction,
+  type LiveSoundCue,
+} from "@/features/auctions/live/live-feedback";
 import {
   activateTierAction,
   beginCloseAction,
@@ -52,10 +63,12 @@ function formatCountdown(seconds: number): string {
 export function LiveConsole({
   auctionId,
   initialSnapshot,
+  initialSoundEnabled,
   role,
 }: {
   auctionId: string;
   initialSnapshot: LiveSnapshot;
+  initialSoundEnabled: boolean;
   role: "organizer" | "representative";
 }) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
@@ -82,12 +95,66 @@ export function LiveConsole({
   // change what the console shows or disable a control, or the console would
   // visibly flicker every two seconds.
   const refreshing = useRef(false);
+  // The last committed snapshot, so a change can be described without
+  // re-rendering for every poll that returns the same revision.
+  const previousSnapshot = useRef(initialSnapshot);
+  const [announcement, setAnnouncement] = useState<null | string>(null);
+  const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
+  const audioContext = useRef<AudioContext | null>(null);
 
-  const accept = useCallback((next: LiveSnapshot) => {
-    setSnapshot(next);
-    setClockOffsetMs(Date.now() - Date.parse(next.serverTime));
-    setLastSyncedAt(Date.now());
-  }, []);
+  /**
+   * Plays one short cue for a material change. Sounds are off until the User
+   * opts in, and every cue repeats something already visible on the console.
+   */
+  const playCue = useCallback(
+    (cue: LiveSoundCue) => {
+      if (!soundEnabled) return;
+      if (typeof window === "undefined") return;
+      const Context = window.AudioContext;
+      if (!Context) return;
+      audioContext.current ??= new Context();
+      const context = audioContext.current;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value =
+        cue === "sold"
+          ? 880
+          : cue === "close"
+            ? 440
+            : cue === "bid"
+              ? 660
+              : 220;
+      gain.gain.value = 0.05;
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.12);
+    },
+    [soundEnabled],
+  );
+
+  async function toggleSound(enabled: boolean): Promise<void> {
+    setSoundEnabled(enabled);
+    // The preference is stored on the User, so it survives a reload and every
+    // console follows it.
+    await authClient.updateUser({ soundEnabled: enabled });
+  }
+
+  const accept = useCallback(
+    (next: LiveSnapshot) => {
+      const previous = previousSnapshot.current;
+      const change = describeLiveChange(previous, next);
+      const cue = soundCueFor(previous, next);
+      previousSnapshot.current = next;
+      if (change) setAnnouncement(change);
+      if (cue) playCue(cue);
+      setSnapshot(next);
+      setClockOffsetMs(Date.now() - Date.parse(next.serverTime));
+      setLastSyncedAt(Date.now());
+    },
+    [playCue],
+  );
 
   const refresh = useCallback(async () => {
     if (refreshing.current) return;
@@ -148,41 +215,133 @@ export function LiveConsole({
     });
   }, [auctionId, role, snapshot.revision]);
 
-  async function dispatch(
-    action: Promise<LiveActionPayload>,
-    options: { completing?: boolean } = {},
-  ) {
-    setPending(true);
-    setMessage(null);
-    setNotice(null);
-    try {
-      const payload = await action;
-      if (payload.snapshot) {
-        accept(payload.snapshot);
-      } else if (options.completing) {
-        setFinished(true);
+  const dispatch = useCallback(
+    async (
+      action: Promise<LiveActionPayload>,
+      options: { completing?: boolean } = {},
+    ) => {
+      setPending(true);
+      setMessage(null);
+      setNotice(null);
+      try {
+        const payload = await action;
+        if (payload.snapshot) {
+          accept(payload.snapshot);
+        } else if (options.completing) {
+          setFinished(true);
+        }
+        if (payload.outcome.status === "rejected")
+          setMessage(payload.outcome.message);
+        if (payload.outcome.status === "unauthorized") {
+          setMessage("You no longer have access to this Auction.");
+        }
+        if (
+          (payload.outcome.status === "accepted" ||
+            payload.outcome.status === "replayed") &&
+          payload.outcome.notice
+        ) {
+          setNotice(payload.outcome.notice);
+        }
+      } catch {
+        // The connection dropped before the server answered, so nothing was
+        // committed as far as this console knows. Controls stay disabled until a
+        // fresh snapshot arrives.
+        setMessage("The connection dropped before the server answered.");
+      } finally {
+        setPending(false);
       }
-      if (payload.outcome.status === "rejected")
-        setMessage(payload.outcome.message);
-      if (payload.outcome.status === "unauthorized") {
-        setMessage("You no longer have access to this Auction.");
+    },
+    [accept],
+  );
+
+  // Organizer keyboard controls. They never fire while a text field, selection
+  // control, or dialog has focus, so typing a reason cannot pause the Auction.
+  const runShortcut = useCallback(
+    (action: LiveShortcutAction) => {
+      if (role !== "organizer" || pending) return;
+      const active = snapshot.activePlayer;
+
+      if (action === "pause_resume") {
+        if (snapshot.lifecycle === "live") {
+          void dispatch(
+            pauseAction(auctionId, { expectedRevision: snapshot.revision }),
+          );
+        } else if (snapshot.lifecycle === "paused") {
+          void dispatch(
+            resumeAction(auctionId, { expectedRevision: snapshot.revision }),
+          );
+        }
+        return;
       }
-      if (
-        (payload.outcome.status === "accepted" ||
-          payload.outcome.status === "replayed") &&
-        payload.outcome.notice
-      ) {
-        setNotice(payload.outcome.notice);
+
+      if (action === "close_toggle") {
+        if (
+          !active ||
+          snapshot.closeMode !== "manual" ||
+          snapshot.lifecycle !== "live"
+        ) {
+          return;
+        }
+        void dispatch(
+          active.warningDeadline
+            ? cancelCloseAction(auctionId, {
+                expectedRevision: snapshot.revision,
+                presentationId: active.presentationId,
+              })
+            : beginCloseAction(auctionId, {
+                expectedRevision: snapshot.revision,
+                presentationId: active.presentationId,
+              }),
+        );
+        return;
       }
-    } catch {
-      // The connection dropped before the server answered, so nothing was
-      // committed as far as this console knows. Controls stay disabled until a
-      // fresh snapshot arrives.
-      setMessage("The connection dropped before the server answered.");
-    } finally {
-      setPending(false);
+
+      if (action === "next_player") {
+        if (active) return;
+        void dispatch(
+          selectPlayerAction(auctionId, {
+            expectedRevision: snapshot.revision,
+            selectionMethod: "random",
+          }),
+        );
+        return;
+      }
+
+      if (action === "mark_unsold") {
+        if (!active || snapshot.currentBid) return;
+        if (returnReason.trim() === "") {
+          setMessage("Enter a return reason before marking the Player Unsold.");
+          return;
+        }
+        void dispatch(
+          returnPlayerAction(auctionId, {
+            expectedRevision: snapshot.revision,
+            presentationId: active.presentationId,
+            reason: returnReason,
+          }),
+        );
+      }
+    },
+    [auctionId, dispatch, pending, returnReason, role, snapshot],
+  );
+  const shortcutRunner = useRef(runShortcut);
+
+  useEffect(() => {
+    // Keeping the latest handler in a ref lets the window listener stay bound
+    // once while always calling the current closure.
+    shortcutRunner.current = runShortcut;
+  });
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const action = shortcutActionFor(event);
+      if (!action) return;
+      event.preventDefault();
+      shortcutRunner.current(action);
     }
-  }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const activePlayer = snapshot.activePlayer;
   const serverNowMs = now - clockOffsetMs;
@@ -242,6 +401,14 @@ export function LiveConsole({
             The Auction is read-only. Its final Results revision is published.
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <Link
+            className="text-sm underline"
+            href={`/app/auctions/${auctionId}/results`}
+          >
+            Open Auction Results
+          </Link>
+        </CardContent>
       </Card>
     );
   }
@@ -315,13 +482,13 @@ export function LiveConsole({
           </div>
 
           {warningRemaining !== null && warningRemaining > 0 && (
-            <p aria-live="assertive" className="font-medium" role="status">
+            <p className="font-medium tabular-nums">
               Closing in {formatCountdown(warningRemaining)}
             </p>
           )}
 
           {closeRemaining !== null && closeRemaining > 0 && !finalizing && (
-            <p aria-live="polite" className="font-medium" role="status">
+            <p className="font-medium tabular-nums">
               Timed Close in {formatCountdown(closeRemaining)}
             </p>
           )}
@@ -345,6 +512,25 @@ export function LiveConsole({
               {notice}
             </p>
           )}
+
+          {/*
+            One polite live region for material changes only. Timer ticks are
+            not announced, and neither is an unchanged poll.
+          */}
+          <p aria-live="polite" className="sr-only" role="status">
+            {announcement ?? ""}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={soundEnabled}
+              id="live-sounds"
+              onCheckedChange={(checked) => void toggleSound(checked)}
+            />
+            <label className="text-sm" htmlFor="live-sounds">
+              Live sounds (off by default)
+            </label>
+          </div>
         </CardContent>
       </Card>
 
@@ -481,6 +667,15 @@ export function LiveConsole({
                 Complete Auction
               </Button>
             </div>
+
+            {snapshot.lifecycle === "paused" && (
+              <Link
+                className="text-sm underline"
+                href={`/app/auctions/${auctionId}/manage`}
+              >
+                Open Manage Auction for paused changes
+              </Link>
+            )}
 
             <div className="flex flex-wrap items-end gap-3 border-t pt-4">
               <Field className="min-w-48 flex-1">
@@ -726,6 +921,35 @@ export function LiveConsole({
                 minimum.
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {role === "organizer" && (
+        <Card>
+          <CardHeader>
+            <CardTitle aria-level={2} role="heading">
+              Keyboard shortcuts
+            </CardTitle>
+            <CardDescription>
+              Shortcuts act only while the Auction is running and never while
+              you are typing in a field or a dialog is open.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-1 text-sm">
+              {LIVE_SHORTCUTS.map((shortcut) => (
+                <li
+                  className="flex items-center justify-between gap-4"
+                  key={shortcut.action}
+                >
+                  <span>{shortcut.description}</span>
+                  <kbd className="rounded border px-1.5 font-mono text-xs">
+                    {shortcut.key.toUpperCase()}
+                  </kbd>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       )}

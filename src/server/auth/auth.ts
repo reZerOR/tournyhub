@@ -6,6 +6,7 @@ import type { GoogleOptions } from "better-auth/social-providers";
 import type { Pool } from "pg";
 
 import { serverEnv } from "@/config/server-env";
+import { isUserSuspended } from "@/server/auction-query/administration";
 import { getPool } from "@/server/database/pool";
 import { checkAndRecordOtpRequest } from "@/server/auth/otp-request-log";
 import { createDefaultEmailSender } from "@/server/email/create-email-sender";
@@ -125,6 +126,20 @@ export function buildAuthOptions({
     },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        // A suspended User cannot establish a session or keep using one: every
+        // authentication path refuses an account with an active suspension, and
+        // suspension also deletes that account's sessions.
+        const activeSession = await getSessionFromCtx(ctx);
+        if (
+          activeSession?.user &&
+          (await isUserSuspended(database, activeSession.user.id))
+        ) {
+          throw new APIError("FORBIDDEN", {
+            code: "ACCOUNT_SUSPENDED",
+            message: "This account is suspended.",
+          });
+        }
+
         if (DISABLED_PASSWORD_PATHS.has(ctx.path ?? "")) {
           throw new APIError("NOT_FOUND");
         }

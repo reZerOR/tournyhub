@@ -599,94 +599,105 @@ export function PlayersEditor({
               </AlertDescription>
             </Alert>
           )}
-          <table className="w-full text-sm">
-            <caption className="sr-only">Player Entries</caption>
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th className="py-2 pr-3 font-medium" scope="col">
-                  Name
-                </th>
-                <th className="py-2 pr-3 font-medium" scope="col">
-                  Role
-                </th>
-                <th className="py-2 pr-3 font-medium" scope="col">
-                  External Player ID
-                </th>
-                <th className="py-2 pr-3 font-medium" scope="col">
-                  Starting price
-                </th>
-                <th className="py-2 pr-3 font-medium" scope="col">
-                  Custom values
-                </th>
-                <th className="py-2 font-medium" scope="col">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.length === 0 && (
-                <tr>
-                  <td className="py-3 text-muted-foreground" colSpan={6}>
-                    You haven&apos;t added any Player Entries yet.
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <caption className="sr-only">Player Entries</caption>
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="py-2 pr-3 font-medium" scope="col">
+                    Name
+                  </th>
+                  <th className="py-2 pr-3 font-medium" scope="col">
+                    Role
+                  </th>
+                  <th className="py-2 pr-3 font-medium" scope="col">
+                    External Player ID
+                  </th>
+                  <th className="py-2 pr-3 font-medium" scope="col">
+                    Starting price
+                  </th>
+                  <th className="py-2 pr-3 font-medium" scope="col">
+                    Custom values
+                  </th>
+                  <th className="py-2 font-medium" scope="col">
+                    Actions
+                  </th>
                 </tr>
-              )}
-              {entries.map((entry) => (
-                <tr className="border-b align-top last:border-0" key={entry.id}>
-                  <td className="py-2 pr-3">
-                    <div className="flex items-center gap-2">
-                      <span>{entry.displayName}</span>
-                      {duplicateNames.has(
-                        normalizeDisplayName(entry.displayName),
-                      ) && <Badge variant="outline">Duplicate name</Badge>}
-                    </div>
-                  </td>
-                  <td className="py-2 pr-3">{entry.role ?? "—"}</td>
-                  <td className="py-2 pr-3">{entry.externalPlayerId ?? "—"}</td>
-                  <td className="py-2 pr-3">
-                    {entry.startingPriceOverride ?? "—"}
-                  </td>
-                  <td className="py-2 pr-3">
-                    {customFields.length === 0 ? (
-                      "—"
-                    ) : (
-                      <ul className="flex flex-col gap-0.5">
-                        {customFields.map((field) => (
-                          <li className="text-muted-foreground" key={field.id}>
-                            {field.label}: {entry.customValues[field.id] ?? "—"}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
-                  <td className="py-2">
-                    <div className="flex gap-1">
-                      <Button
-                        onClick={() => {
-                          setEditingEntryId(entry.id);
-                          setEditingEntry(toFormValues(entry));
-                          setEditingEntryError(null);
-                        }}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        onClick={() => removePlayer(entry.id)}
-                        size="sm"
-                        type="button"
-                        variant="destructive"
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {entries.length === 0 && (
+                  <tr>
+                    <td className="py-3 text-muted-foreground" colSpan={6}>
+                      You haven&apos;t added any Player Entries yet.
+                    </td>
+                  </tr>
+                )}
+                {entries.map((entry) => (
+                  <tr
+                    className="border-b align-top last:border-0"
+                    key={entry.id}
+                  >
+                    <td className="py-2 pr-3">
+                      <div className="flex items-center gap-2">
+                        <span>{entry.displayName}</span>
+                        {duplicateNames.has(
+                          normalizeDisplayName(entry.displayName),
+                        ) && <Badge variant="outline">Duplicate name</Badge>}
+                      </div>
+                    </td>
+                    <td className="py-2 pr-3">{entry.role ?? "—"}</td>
+                    <td className="py-2 pr-3">
+                      {entry.externalPlayerId ?? "—"}
+                    </td>
+                    <td className="py-2 pr-3">
+                      {entry.startingPriceOverride ?? "—"}
+                    </td>
+                    <td className="py-2 pr-3">
+                      {customFields.length === 0 ? (
+                        "—"
+                      ) : (
+                        <ul className="flex flex-col gap-0.5">
+                          {customFields.map((field) => (
+                            <li
+                              className="text-muted-foreground"
+                              key={field.id}
+                            >
+                              {field.label}:{" "}
+                              {entry.customValues[field.id] ?? "—"}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                    <td className="py-2">
+                      <div className="flex gap-1">
+                        <Button
+                          onClick={() => {
+                            setEditingEntryId(entry.id);
+                            setEditingEntry(toFormValues(entry));
+                            setEditingEntryError(null);
+                          }}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          onClick={() => removePlayer(entry.id)}
+                          size="sm"
+                          type="button"
+                          variant="destructive"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
 

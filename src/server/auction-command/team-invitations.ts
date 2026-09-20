@@ -182,14 +182,16 @@ export async function acceptTeamInvitation(
     }
 
     const auctionResult = await client.query<{
+      hidden_at: Date | null;
       organizer_id: string;
       status: string;
     }>(
-      `select "organizer_id", "status" from "auction" where "id" = $1 for update`,
+      `select "organizer_id", "status", "hidden_at" from "auction"
+        where "id" = $1 for update`,
       [invitation.auction_id],
     );
     const auction = auctionResult.rows[0];
-    if (!auction) {
+    if (!auction || auction.hidden_at !== null) {
       throw new InvitationError("This invitation link is not valid.");
     }
 
@@ -212,7 +214,11 @@ export async function acceptTeamInvitation(
       );
     }
 
-    if (auction.status !== "draft" && auction.status !== "ready") {
+    if (
+      auction.status !== "draft" &&
+      auction.status !== "ready" &&
+      auction.status !== "paused"
+    ) {
       throw new InvitationError(
         "This Auction is no longer accepting new representatives.",
       );

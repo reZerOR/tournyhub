@@ -260,155 +260,160 @@ export function TeamsEditor({
                   : ""}
           </p>
 
-          <table className="w-full text-sm">
-            <caption className="sr-only">Teams</caption>
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th className="py-2 pr-3 font-medium" scope="col">
-                  Order
-                </th>
-                <th className="py-2 pr-3 font-medium" scope="col">
-                  Name
-                </th>
-                <th className="py-2 pr-3 font-medium" scope="col">
-                  Color
-                </th>
-                <th className="py-2 pr-3 font-medium" scope="col">
-                  Logo
-                </th>
-                <th className="py-2 pr-3 font-medium" scope="col">
-                  Representative
-                </th>
-                <th className="py-2 font-medium" scope="col">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {teams.length === 0 && (
-                <tr>
-                  <td className="py-3 text-muted-foreground" colSpan={6}>
-                    You haven&apos;t created any Teams yet.
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <caption className="sr-only">Teams</caption>
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="py-2 pr-3 font-medium" scope="col">
+                    Order
+                  </th>
+                  <th className="py-2 pr-3 font-medium" scope="col">
+                    Name
+                  </th>
+                  <th className="py-2 pr-3 font-medium" scope="col">
+                    Color
+                  </th>
+                  <th className="py-2 pr-3 font-medium" scope="col">
+                    Logo
+                  </th>
+                  <th className="py-2 pr-3 font-medium" scope="col">
+                    Representative
+                  </th>
+                  <th className="py-2 font-medium" scope="col">
+                    Actions
+                  </th>
                 </tr>
-              )}
-              {teams.map((team, index) => (
-                <tr className="border-b align-top last:border-0" key={team.id}>
-                  <td className="py-2 pr-3">
-                    <div className="flex gap-1">
-                      <Button
-                        aria-label={`Move ${team.name ?? "Team"} up`}
-                        disabled={pending || index === 0}
-                        onClick={() => move(team.id, "up")}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        ↑
-                      </Button>
-                      <Button
-                        aria-label={`Move ${team.name ?? "Team"} down`}
-                        disabled={pending || index === teams.length - 1}
-                        onClick={() => move(team.id, "down")}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        ↓
-                      </Button>
-                    </div>
-                  </td>
-                  <td className="py-2 pr-3">{team.name ?? "Unnamed Team"}</td>
-                  <td className="py-2 pr-3">
-                    {team.color ? (
-                      <span className="flex items-center gap-2">
-                        <span
-                          aria-hidden
-                          className="inline-block size-4 rounded-full border"
-                          style={{ backgroundColor: team.color }}
-                        />
-                        {team.color}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <div className="flex flex-col gap-2">
-                      {team.logoHref && (
-                        <Image
-                          alt={`${team.name ?? "Team"} logo`}
-                          className="size-8 rounded"
-                          height={32}
-                          src={team.logoHref}
-                          width={32}
-                        />
-                      )}
-                      <form
-                        className="flex items-center gap-1"
-                        onSubmit={(event) => uploadLogo(event, team.id)}
-                      >
-                        <Input
-                          accept="image/png"
-                          aria-label={`Logo for ${team.name ?? "Team"}`}
-                          className="max-w-40"
-                          name="logo"
-                          type="file"
-                        />
+              </thead>
+              <tbody>
+                {teams.length === 0 && (
+                  <tr>
+                    <td className="py-3 text-muted-foreground" colSpan={6}>
+                      You haven&apos;t created any Teams yet.
+                    </td>
+                  </tr>
+                )}
+                {teams.map((team, index) => (
+                  <tr
+                    className="border-b align-top last:border-0"
+                    key={team.id}
+                  >
+                    <td className="py-2 pr-3">
+                      <div className="flex gap-1">
                         <Button
-                          disabled={pending}
-                          size="sm"
-                          type="submit"
-                          variant="outline"
-                        >
-                          Upload
-                        </Button>
-                      </form>
-                      {team.logoHref && (
-                        <Button
-                          disabled={pending}
-                          onClick={() => removeLogo(team.id)}
+                          aria-label={`Move ${team.name ?? "Team"} up`}
+                          disabled={pending || index === 0}
+                          onClick={() => move(team.id, "up")}
                           size="sm"
                           type="button"
                           variant="ghost"
                         >
-                          Remove logo
+                          ↑
                         </Button>
+                        <Button
+                          aria-label={`Move ${team.name ?? "Team"} down`}
+                          disabled={pending || index === teams.length - 1}
+                          onClick={() => move(team.id, "down")}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          ↓
+                        </Button>
+                      </div>
+                    </td>
+                    <td className="py-2 pr-3">{team.name ?? "Unnamed Team"}</td>
+                    <td className="py-2 pr-3">
+                      {team.color ? (
+                        <span className="flex items-center gap-2">
+                          <span
+                            aria-hidden
+                            className="inline-block size-4 rounded-full border"
+                            style={{ backgroundColor: team.color }}
+                          />
+                          {team.color}
+                        </span>
+                      ) : (
+                        "—"
                       )}
-                    </div>
-                  </td>
-                  <td className="py-2 pr-3">{representativeLabel(team)}</td>
-                  <td className="py-2">
-                    <div className="flex gap-1">
-                      <Button
-                        onClick={() => {
-                          setEditingId(team.id);
-                          setEditing({
-                            color: team.color ?? "",
-                            name: team.name ?? "",
-                          });
-                          setEditingError(null);
-                        }}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        onClick={() => removeTeam(team.id)}
-                        size="sm"
-                        type="button"
-                        variant="destructive"
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <div className="flex flex-col gap-2">
+                        {team.logoHref && (
+                          <Image
+                            alt={`${team.name ?? "Team"} logo`}
+                            className="size-8 rounded"
+                            height={32}
+                            src={team.logoHref}
+                            width={32}
+                          />
+                        )}
+                        <form
+                          className="flex items-center gap-1"
+                          onSubmit={(event) => uploadLogo(event, team.id)}
+                        >
+                          <Input
+                            accept="image/png"
+                            aria-label={`Logo for ${team.name ?? "Team"}`}
+                            className="max-w-40"
+                            name="logo"
+                            type="file"
+                          />
+                          <Button
+                            disabled={pending}
+                            size="sm"
+                            type="submit"
+                            variant="outline"
+                          >
+                            Upload
+                          </Button>
+                        </form>
+                        {team.logoHref && (
+                          <Button
+                            disabled={pending}
+                            onClick={() => removeLogo(team.id)}
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            Remove logo
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2 pr-3">{representativeLabel(team)}</td>
+                    <td className="py-2">
+                      <div className="flex gap-1">
+                        <Button
+                          onClick={() => {
+                            setEditingId(team.id);
+                            setEditing({
+                              color: team.color ?? "",
+                              name: team.name ?? "",
+                            });
+                            setEditingError(null);
+                          }}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          onClick={() => removeTeam(team.id)}
+                          size="sm"
+                          type="button"
+                          variant="destructive"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {editingId && (
             <form

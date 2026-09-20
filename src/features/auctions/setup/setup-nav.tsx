@@ -25,7 +25,10 @@ export function SetupNav({
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Auction setup" className="flex flex-col gap-1">
+    <nav
+      aria-label="Auction setup"
+      className="flex gap-1 overflow-x-auto pb-2 md:flex-col md:overflow-visible md:pb-0"
+    >
       {SETUP_SECTIONS.filter(
         (section) => !("tieredOnly" in section) || rulesMode === "tiered",
       ).map((section) => {

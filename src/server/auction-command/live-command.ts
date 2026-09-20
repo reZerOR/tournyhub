@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 
 import type { AuctionStatus, CloseMode, RulesMode } from "@/domain/auction";
+import type { Queryable } from "@/server/database/queryable";
 
 /**
  * The uniform result of a live command. A rejected command carries a stable
@@ -142,7 +143,7 @@ export async function bumpRevision(
 
 /** Writes an immutable Audit Entry for a fairness-affecting action. */
 export async function writeAuditEntry(
-  client: PoolClient,
+  client: Queryable,
   {
     action,
     actorUserId,
