@@ -11,15 +11,24 @@ const SETUP_SECTIONS = [
   { label: "Teams", slug: "teams" },
   { label: "Representatives", slug: "representatives" },
   { label: "Rules", slug: "rules" },
+  { label: "Tiers", slug: "tiers", tieredOnly: true },
   { label: "Readiness", slug: "readiness" },
 ] as const;
 
-export function SetupNav({ auctionId }: { auctionId: string }) {
+export function SetupNav({
+  auctionId,
+  rulesMode,
+}: {
+  auctionId: string;
+  rulesMode: "simple" | "tiered";
+}) {
   const pathname = usePathname();
 
   return (
     <nav aria-label="Auction setup" className="flex flex-col gap-1">
-      {SETUP_SECTIONS.map((section) => {
+      {SETUP_SECTIONS.filter(
+        (section) => !("tieredOnly" in section) || rulesMode === "tiered",
+      ).map((section) => {
         const href = `/app/auctions/${auctionId}/setup/${section.slug}`;
         const isActive = pathname === href;
         return (

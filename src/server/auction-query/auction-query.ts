@@ -62,6 +62,22 @@ export async function getArchivedAuctions(
   return result.rows.map(mapRow);
 }
 
+/** Every non-archived Auction this User currently represents a Team in. */
+export async function getRepresentedAuctions(
+  pool: Pool,
+  userId: string,
+): Promise<Auction[]> {
+  const result = await pool.query<AuctionRow>(
+    `select a.* from "auction" a
+       join "team" t on t."auction_id" = a."id"
+      where t."representative_user_id" = $1
+        and a."status" <> 'archived'
+      order by a."updated_at" desc`,
+    [userId],
+  );
+  return result.rows.map(mapRow);
+}
+
 /**
  * An authorized snapshot of a Draft Auction. Returns null both when the
  * Auction does not exist and when it belongs to another organizer, so a

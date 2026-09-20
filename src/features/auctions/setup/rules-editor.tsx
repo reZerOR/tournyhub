@@ -13,7 +13,10 @@ import {
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { RULE_LIMITS } from "@/domain/rules";
-import { saveSimpleRulesAction } from "@/features/auctions/setup/rules-actions";
+import {
+  saveSimpleRulesAction,
+  saveTieredRulesAction,
+} from "@/features/auctions/setup/rules-actions";
 import type { SerializedRuleSet } from "@/features/auctions/setup/serialize-team";
 
 function text(value: null | number): string {
@@ -40,33 +43,25 @@ export function RulesEditor({
   const [errorMessage, setErrorMessage] = useState<null | string>(null);
   const [hasSaved, setHasSaved] = useState(false);
 
-  if (rulesMode === "tiered") {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle aria-level={2} role="heading">
-            Rules
-          </CardTitle>
-          <CardDescription>
-            This Auction uses Tiered Rules. Configure Tiered Rules and Tiers in
-            a later step.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
   async function save(event: FormEvent) {
     event.preventDefault();
     setPending(true);
     setErrorMessage(null);
-    const result = await saveSimpleRulesAction(auctionId, {
-      bidIncrement,
-      budget,
-      defaultStartingPrice,
-      rosterMax,
-      rosterMin,
-    });
+    const result =
+      rulesMode === "tiered"
+        ? await saveTieredRulesAction(auctionId, {
+            bidIncrement,
+            budget,
+            rosterMax,
+            rosterMin,
+          })
+        : await saveSimpleRulesAction(auctionId, {
+            bidIncrement,
+            budget,
+            defaultStartingPrice,
+            rosterMax,
+            rosterMin,
+          });
     setPending(false);
     if (result.status === "saved") {
       setBudget(text(result.ruleSet.budget));
@@ -88,8 +83,9 @@ export function RulesEditor({
           Rules
         </CardTitle>
         <CardDescription>
-          Simple Rules give every Team the same Budget, Bid Increment, total
-          Roster limits, and default Starting Price.
+          {rulesMode === "tiered"
+            ? "Tiered Rules give every Team the same Budget, Bid Increment, and total Roster limits. Each Tier supplies its own Starting Price and per-Team counts."
+            : "Simple Rules give every Team the same Budget, Bid Increment, total Roster limits, and default Starting Price."}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -135,19 +131,21 @@ export function RulesEditor({
                 value={rosterMax}
               />
             </Field>
-            <Field className="max-w-48">
-              <FieldLabel htmlFor="rules-starting-price">
-                Default Starting Price
-              </FieldLabel>
-              <Input
-                id="rules-starting-price"
-                inputMode="numeric"
-                onChange={(event) =>
-                  setDefaultStartingPrice(event.target.value)
-                }
-                value={defaultStartingPrice}
-              />
-            </Field>
+            {rulesMode === "simple" && (
+              <Field className="max-w-48">
+                <FieldLabel htmlFor="rules-starting-price">
+                  Default Starting Price
+                </FieldLabel>
+                <Input
+                  id="rules-starting-price"
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setDefaultStartingPrice(event.target.value)
+                  }
+                  value={defaultStartingPrice}
+                />
+              </Field>
+            )}
           </div>
 
           <p className="text-sm text-muted-foreground">

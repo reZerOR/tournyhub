@@ -23,6 +23,7 @@ const GROUP_LABELS: Record<(typeof READINESS_GROUPS)[number], string> = {
   players: "Players",
   rules: "Rules",
   teams: "Teams",
+  tiers: "Tiers",
 };
 
 function IssueList({

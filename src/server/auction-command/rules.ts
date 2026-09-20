@@ -3,8 +3,10 @@ import type { Pool } from "pg";
 import type { RulesMode } from "@/domain/auction";
 import {
   simpleRulesInputSchema,
+  tieredRulesInputSchema,
   type AuctionRuleSet,
   type SimpleRulesInput,
+  type TieredRulesInput,
 } from "@/domain/rules";
 import {
   lockEditableAuction,
@@ -71,6 +73,70 @@ export async function saveSimpleRules(
         parsed.budget,
         parsed.bidIncrement,
         parsed.defaultStartingPrice,
+      ],
+    );
+    await markAuctionDraft(client, auctionId);
+    await client.query("commit");
+    return mapRuleSetRow(saved.rows[0]!);
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Saves the shared Tiered Rules. Every Team uses the same Budget, Bid
+ * Increment, and total Roster limits; each Tier supplies its own Starting
+ * Price and shared per-Team counts. Returns null when the Auction is not
+ * editable by this Organizer.
+ */
+export async function saveTieredRules(
+  pool: Pool,
+  organizerId: string,
+  auctionId: string,
+  input: TieredRulesInput,
+): Promise<null | AuctionRuleSet> {
+  const parsed = tieredRulesInputSchema.parse(input);
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    if (!(await lockEditableAuction(client, organizerId, auctionId))) {
+      await client.query("rollback");
+      return null;
+    }
+
+    const auction = await client.query<{ rules_mode: RulesMode }>(
+      `select "rules_mode" from "auction" where "id" = $1`,
+      [auctionId],
+    );
+    if (auction.rows[0]?.rules_mode !== "tiered") {
+      await client.query("rollback");
+      throw new RuleSetupError(
+        "This Auction uses Simple Rules. Save Simple Rules instead.",
+      );
+    }
+
+    const saved = await client.query<RuleSetRow>(
+      `insert into "auction_rule_set"
+          ("auction_id", "roster_min", "roster_max", "budget", "bid_increment",
+           "default_starting_price")
+       values ($1, $2, $3, $4, $5, null)
+       on conflict ("auction_id") do update
+         set "roster_min" = excluded."roster_min",
+             "roster_max" = excluded."roster_max",
+             "budget" = excluded."budget",
+             "bid_increment" = excluded."bid_increment",
+             "default_starting_price" = null,
+             "updated_at" = now()
+       returning *`,
+      [
+        auctionId,
+        parsed.rosterMin,
+        parsed.rosterMax,
+        parsed.budget,
+        parsed.bidIncrement,
       ],
     );
     await markAuctionDraft(client, auctionId);

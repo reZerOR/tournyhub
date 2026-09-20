@@ -15,15 +15,23 @@ import type { Auction } from "@/domain/auction";
 import {
   getArchivedAuctions,
   getOrganizerAuctions,
+  getRepresentedAuctions,
 } from "@/server/auction-query/auction-query";
 import { getCurrentSession } from "@/server/auth/session";
 import { getPool } from "@/server/database/pool";
+
+function auctionHref(auction: Auction): string {
+  if (auction.status === "live" || auction.status === "paused") {
+    return `/app/auctions/${auction.id}/live`;
+  }
+  return `/app/auctions/${auction.id}/setup/basics`;
+}
 
 function AuctionRow({ auction }: { auction: Auction }) {
   return (
     <Link
       className="flex items-center justify-between gap-4 py-4 hover:bg-muted/50"
-      href={`/app/auctions/${auction.id}/setup/basics`}
+      href={auctionHref(auction)}
     >
       <div className="flex min-w-0 flex-col gap-1">
         <span className="font-medium">
@@ -58,10 +66,12 @@ export default async function DashboardPage() {
   if (!session) redirect("/sign-in");
 
   const pool = getPool();
-  const [organizedAuctions, archivedAuctions] = await Promise.all([
-    getOrganizerAuctions(pool, session.user.id),
-    getArchivedAuctions(pool, session.user.id),
-  ]);
+  const [organizedAuctions, representedAuctions, archivedAuctions] =
+    await Promise.all([
+      getOrganizerAuctions(pool, session.user.id),
+      getRepresentedAuctions(pool, session.user.id),
+      getArchivedAuctions(pool, session.user.id),
+    ]);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -108,9 +118,13 @@ export default async function DashboardPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            You don&apos;t represent any Teams yet.
-          </p>
+          {representedAuctions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              You don&apos;t represent any Teams yet.
+            </p>
+          ) : (
+            <AuctionList auctions={representedAuctions} />
+          )}
         </CardContent>
       </Card>
 

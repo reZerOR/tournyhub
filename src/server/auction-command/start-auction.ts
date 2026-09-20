@@ -1,7 +1,12 @@
 import type { Pool } from "pg";
 
+import type { RulesMode } from "@/domain/auction";
 import { evaluateReadiness } from "@/domain/readiness";
-import { isSimpleRuleSetComplete, resolveStartingPrice } from "@/domain/rules";
+import {
+  isSimpleRuleSetComplete,
+  isTieredRuleSetComplete,
+  resolveOfferedStartingPrice,
+} from "@/domain/rules";
 import { lockEditableAuction } from "@/server/auction-command/lock-editable-auction";
 import { loadReadinessInput } from "@/server/auction-query/readiness";
 import { isUniqueViolation } from "@/server/database/pg-error";
@@ -24,10 +29,11 @@ export interface StartedAuction {
 }
 
 /**
- * Starts a feasible Auction. Starting freezes every Player's resolved Starting
- * Price into the first immutable Auction revision, moves the Auction to Live,
- * and offers no Player automatically. Returns null when the Auction is not
- * editable by this Organizer.
+ * Starts a feasible Auction. Starting freezes Tier order and every Player's
+ * resolved Starting Price into the first immutable Auction revision, moves the
+ * Auction to Live, and offers no Player automatically. Player Representatives
+ * are recorded as preassigned and never enter the biddable queue. Returns null
+ * when the Auction is not editable by this Organizer.
  */
 export async function startAuction(
   pool: Pool,
@@ -51,9 +57,22 @@ export async function startAuction(
         readiness.errors.map((issue) => issue.message),
       );
     }
+
+    const auction = await client.query<{ rules_mode: RulesMode }>(
+      `select "rules_mode" from "auction" where "id" = $1`,
+      [auctionId],
+    );
+    const rulesMode = auction.rows[0]?.rules_mode ?? "simple";
     // Readiness already required complete Rules; this narrows the nulls away
     // for the frozen revision payload.
-    if (!isSimpleRuleSetComplete(input.ruleSet)) {
+    const ruleSet = input.ruleSet;
+    if (rulesMode === "tiered") {
+      if (!isTieredRuleSetComplete(ruleSet)) {
+        throw new AuctionStartError(
+          "Finish the Rules before starting the Auction.",
+        );
+      }
+    } else if (!isSimpleRuleSetComplete(ruleSet)) {
       throw new AuctionStartError(
         "Finish the Rules before starting the Auction.",
       );
@@ -69,27 +88,50 @@ export async function startAuction(
       );
     }
 
-    const ruleSet = input.ruleSet;
-    const [entries, teams, time] = await Promise.all([
-      client.query<{
-        display_name: string;
-        id: string;
-        is_representative: boolean;
-        starting_price_override: null | number;
-      }>(
-        `select "id", "display_name", "is_representative", "starting_price_override"
-           from "player_entry" where "auction_id" = $1
-          order by "created_at" asc, "id" asc`,
-        [auctionId],
-      ),
-      client.query<{ id: string; name: null | string; position: number }>(
-        `select "id", "name", "position" from "team"
-          where "auction_id" = $1
-         order by "position" asc, "created_at" asc, "id" asc`,
-        [auctionId],
-      ),
-      client.query<{ now: Date }>(`select now() as now`),
-    ]);
+    const entries = await client.query<{
+      id: string;
+      display_name: string;
+      is_representative: boolean;
+      starting_price_override: null | number;
+      tier_id: null | string;
+    }>(
+      `select "id", "display_name", "is_representative",
+              "starting_price_override", "tier_id"
+         from "player_entry" where "auction_id" = $1
+        order by "created_at" asc, "id" asc`,
+      [auctionId],
+    );
+    const teams = await client.query<{
+      id: string;
+      name: null | string;
+      position: number;
+    }>(
+      `select "id", "name", "position" from "team"
+        where "auction_id" = $1
+       order by "position" asc, "created_at" asc, "id" asc`,
+      [auctionId],
+    );
+    const tiers = await client.query<{
+      id: string;
+      label: string;
+      position: number;
+      starting_price: number;
+      min_per_team: number;
+      max_per_team: number;
+    }>(
+      `select "id", "label", "position", "starting_price", "min_per_team",
+              "max_per_team"
+         from "tier" where "auction_id" = $1
+        order by "position" asc, "created_at" asc, "id" asc`,
+      [auctionId],
+    );
+    const time = await client.query<{ now: Date }>(`select now() as now`);
+
+    const frozenTiers = tiers.rows;
+    const tierStartingPrice = new Map(
+      frozenTiers.map((tier) => [tier.id, tier.starting_price]),
+    );
+    const defaultStartingPrice = ruleSet.defaultStartingPrice ?? 0;
 
     const payload = {
       frozen_at: time.rows[0]!.now.toISOString(),
@@ -97,10 +139,15 @@ export async function startAuction(
         display_name: entry.display_name,
         id: entry.id,
         is_representative: entry.is_representative,
-        starting_price: resolveStartingPrice(
-          entry.starting_price_override,
-          ruleSet.defaultStartingPrice,
-        ),
+        starting_price: resolveOfferedStartingPrice({
+          defaultStartingPrice,
+          startingPriceOverride: entry.starting_price_override,
+          tierStartingPrice:
+            rulesMode === "tiered" && entry.tier_id
+              ? (tierStartingPrice.get(entry.tier_id) ?? null)
+              : null,
+        }),
+        tier_id: entry.tier_id,
       })),
       rules: {
         bid_increment: ruleSet.bidIncrement,
@@ -108,11 +155,20 @@ export async function startAuction(
         default_starting_price: ruleSet.defaultStartingPrice,
         roster_max: ruleSet.rosterMax,
         roster_min: ruleSet.rosterMin,
+        rules_mode: rulesMode,
       },
       teams: teams.rows.map((team) => ({
         id: team.id,
         name: team.name,
         position: team.position,
+      })),
+      tiers: frozenTiers.map((tier) => ({
+        id: tier.id,
+        label: tier.label,
+        max_per_team: tier.max_per_team,
+        min_per_team: tier.min_per_team,
+        position: tier.position,
+        starting_price: tier.starting_price,
       })),
     };
 
@@ -121,11 +177,15 @@ export async function startAuction(
        values ($1, 1, $2::jsonb)`,
       [auctionId, JSON.stringify(payload)],
     );
+    const activeTier = rulesMode === "tiered" ? (frozenTiers[0] ?? null) : null;
     await client.query(
       `update "auction"
-          set "status" = 'live', "revision" = 1, "updated_at" = now()
+          set "status" = 'live',
+              "revision" = 1,
+              "active_tier_id" = $2,
+              "updated_at" = now()
         where "id" = $1`,
-      [auctionId],
+      [auctionId, activeTier?.id ?? null],
     );
     await client.query("commit");
 

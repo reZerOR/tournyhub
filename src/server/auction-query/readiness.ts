@@ -1,19 +1,23 @@
+import type { RulesMode } from "@/domain/auction";
 import {
   evaluateReadiness,
   type Readiness,
   type ReadinessInput,
   type ReadinessTeam,
+  type ReadinessTier,
 } from "@/domain/readiness";
-import { resolveStartingPrice } from "@/domain/rules";
+import { resolveOfferedStartingPrice } from "@/domain/rules";
 import { isEditableAuction } from "@/server/auction-query/editable";
 import { loadRuleSet } from "@/server/auction-query/rules";
 import { mapTeamRow, type TeamRow } from "@/server/auction-query/teams";
+import { loadTiers } from "@/server/auction-query/tiers";
 import type { Queryable } from "@/server/database/queryable";
 
 interface PlayerSupplyRow {
   is_representative: boolean;
   starting_price_override: null | number;
   team_id: null | string;
+  tier_id: null | string;
 }
 
 /**
@@ -44,47 +48,71 @@ export async function loadReadinessInput(
   db: Queryable,
   auctionId: string,
 ): Promise<ReadinessInput> {
-  const [ruleSet, teamsResult, supplyResult] = await Promise.all([
-    loadRuleSet(db, auctionId),
-    db.query<TeamRow>(
-      `select * from "team"
-        where "auction_id" = $1
-        order by "position" asc, "created_at" asc, "id" asc`,
-      [auctionId],
-    ),
-    db.query<PlayerSupplyRow>(
-      `select "is_representative", "team_id", "starting_price_override"
-         from "player_entry"
-        where "auction_id" = $1`,
-      [auctionId],
-    ),
-  ]);
+  const [auctionResult, ruleSet, tiers, teamsResult, supplyResult] =
+    await Promise.all([
+      db.query<{ rules_mode: RulesMode }>(
+        `select "rules_mode" from "auction" where "id" = $1`,
+        [auctionId],
+      ),
+      loadRuleSet(db, auctionId),
+      loadTiers(db, auctionId),
+      db.query<TeamRow>(
+        `select * from "team"
+          where "auction_id" = $1
+          order by "position" asc, "created_at" asc, "id" asc`,
+        [auctionId],
+      ),
+      db.query<PlayerSupplyRow>(
+        `select "is_representative", "team_id", "tier_id",
+                "starting_price_override"
+           from "player_entry"
+          where "auction_id" = $1`,
+        [auctionId],
+      ),
+    ]);
+
+  const rulesMode = auctionResult.rows[0]?.rules_mode ?? "simple";
+  const defaultStartingPrice = ruleSet.defaultStartingPrice ?? 0;
+  const tierStartingPrice = new Map(
+    tiers.map((tier) => [tier.id, tier.startingPrice]),
+  );
 
   const teams = teamsResult.rows.map(mapTeamRow);
   const preassignedByTeam = new Map<string, number>();
+  const preassignedByTeamTier = new Map<string, Record<string, number>>();
   for (const entry of supplyResult.rows) {
     if (!entry.is_representative || !entry.team_id) continue;
     preassignedByTeam.set(
       entry.team_id,
       (preassignedByTeam.get(entry.team_id) ?? 0) + 1,
     );
+    if (entry.tier_id) {
+      const byTier = preassignedByTeamTier.get(entry.team_id) ?? {};
+      byTier[entry.tier_id] = (byTier[entry.tier_id] ?? 0) + 1;
+      preassignedByTeamTier.set(entry.team_id, byTier);
+    }
   }
 
   const readinessTeams: ReadinessTeam[] = teams.map((team) => ({
     id: team.id,
     name: team.name,
+    preassignedByTier: preassignedByTeamTier.get(team.id) ?? {},
     preassignedCount: preassignedByTeam.get(team.id) ?? 0,
     representativeUserId: team.representativeUserId,
   }));
 
-  const defaultStartingPrice = ruleSet.defaultStartingPrice ?? 0;
   const players = supplyResult.rows
     .filter((entry) => !entry.is_representative)
     .map((entry) => ({
-      startingPrice: resolveStartingPrice(
-        entry.starting_price_override,
+      startingPrice: resolveOfferedStartingPrice({
         defaultStartingPrice,
-      ),
+        startingPriceOverride: entry.starting_price_override,
+        tierStartingPrice:
+          rulesMode === "tiered" && entry.tier_id
+            ? (tierStartingPrice.get(entry.tier_id) ?? null)
+            : null,
+      }),
+      tierId: entry.tier_id,
     }));
 
   const disconnectedRepresentativeUserIds =
@@ -96,12 +124,23 @@ export async function loadReadinessInput(
       ),
     ]);
 
+  const readinessTiers: ReadinessTier[] = tiers.map((tier) => ({
+    id: tier.id,
+    label: tier.label,
+    maxPerTeam: tier.maxPerTeam,
+    minPerTeam: tier.minPerTeam,
+    position: tier.position,
+    startingPrice: tier.startingPrice,
+  }));
+
   return {
     auctionId,
     disconnectedRepresentativeUserIds,
     players,
     ruleSet,
+    rulesMode,
     teams: readinessTeams,
+    tiers: readinessTiers,
   };
 }
 

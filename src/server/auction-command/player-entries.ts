@@ -44,6 +44,7 @@ interface PlayerEntryRow {
   role: null | string;
   starting_price_override: null | number;
   team_id: null | string;
+  tier_id: null | string;
   updated_at: Date;
 }
 
@@ -79,6 +80,7 @@ function mapPlayerEntryRow(
     role: row.role,
     startingPriceOverride: row.starting_price_override,
     teamId: row.team_id,
+    tierId: row.tier_id,
     updatedAt: row.updated_at,
   };
 }

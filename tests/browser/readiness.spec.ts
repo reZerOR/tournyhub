@@ -41,6 +41,11 @@ test("an Organizer resolves Readiness and starts a feasible Auction", async ({
   browser,
   page,
 }) => {
+  // This test walks the whole Draft-to-Live path, including live console
+  // polling and a three-second Manual Close, so it needs more than the default
+  // budget when the suite runs many files in parallel.
+  test.setTimeout(120_000);
+
   const firstRepEmail = uniqueEmail("start-rep-one");
   const secondRepEmail = uniqueEmail("start-rep-two");
   const firstRepContext = await browser.newContext();
@@ -97,6 +102,40 @@ test("an Organizer resolves Readiness and starts a feasible Auction", async ({
       .locator("a")
       .filter({ hasText: "Startable Auction" });
     await expect(startedRow.getByText("live", { exact: true })).toBeVisible();
+
+    // The dashboard opens the private Live console for a Live Auction.
+    await startedRow.click();
+    await expect(page).toHaveURL(/\/live$/);
+
+    // The Organizer offers the next Player.
+    await page.getByRole("button", { name: "Random Player" }).click();
+    await expect(page.getByText("No Active Player.")).toBeHidden();
+
+    // A Team Representative sees the committed Player and submits the exact Bid.
+    const repPage = await firstRepContext.newPage();
+    await repPage.goto("/app");
+    await repPage.getByRole("link", { name: /Startable Auction/ }).click();
+    await expect(repPage).toHaveURL(/\/live$/);
+    await repPage.getByRole("button", { name: /^Bid \d+$/ }).click();
+    await expect(
+      repPage.getByText("Your Team leads this Player."),
+    ).toBeVisible();
+
+    // The Organizer's console picks up the committed Bid and its new revision
+    // before closing, exactly as a real Organizer would see the leader change.
+    await expect(page.getByText("Reds (leading)")).toBeVisible();
+
+    // A Manual Close warning can be cancelled without changing the leader, then
+    // finalizes exactly one Sale.
+    await page.getByRole("button", { name: "Start 3-second close" }).click();
+    await expect(page.getByText(/Closing in/)).toBeVisible();
+    await page.getByRole("button", { name: "Cancel warning" }).click();
+    await expect(page.getByText(/Closing in/)).toBeHidden();
+
+    await page.getByRole("button", { name: "Start 3-second close" }).click();
+    await expect(page.getByText("No Active Player.")).toBeVisible({
+      timeout: 15_000,
+    });
   } finally {
     await firstRepContext.close();
     await secondRepContext.close();

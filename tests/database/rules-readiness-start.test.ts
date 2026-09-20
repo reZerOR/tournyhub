@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createPlayerEntry } from "@/server/auction-command/player-entries";
 import { syncAuctionReadiness } from "@/server/auction-command/readiness";
@@ -19,6 +19,7 @@ import {
   createTestUser,
   createTestUserWithEmail,
   pool,
+  resetLiveAuctions,
   uniqueTestEmail,
 } from "./support";
 
@@ -26,11 +27,8 @@ afterAll(cleanupTestUsers);
 
 // Only the start tests create a Live Auction, and the beta allows exactly one
 // across the service. Reset it so each test starts from a clean service.
-afterEach(async () => {
-  await pool.query(
-    `update "auction" set "status" = 'draft' where "status" = 'live'`,
-  );
-});
+beforeEach(resetLiveAuctions);
+afterEach(resetLiveAuctions);
 
 async function registerRep(label: string): Promise<string> {
   const email = uniqueTestEmail(label);

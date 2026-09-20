@@ -1,5 +1,6 @@
 import type { AuctionRuleSet } from "@/domain/rules";
 import type { Team } from "@/domain/team";
+import type { Tier } from "@/domain/tier";
 import type { RepresentativeView } from "@/server/auction-query/representatives";
 
 export interface SerializedTeam {
@@ -64,4 +65,30 @@ export function serializeRuleSet(ruleSet: AuctionRuleSet): SerializedRuleSet {
     rosterMax: ruleSet.rosterMax,
     rosterMin: ruleSet.rosterMin,
   };
+}
+
+export interface SerializedTier {
+  id: string;
+  label: string;
+  maxPerTeam: number;
+  minPerTeam: number;
+  position: number;
+  startingPrice: number;
+}
+
+export function serializeTier(tier: Tier): SerializedTier {
+  return {
+    id: tier.id,
+    label: tier.label,
+    maxPerTeam: tier.maxPerTeam,
+    minPerTeam: tier.minPerTeam,
+    position: tier.position,
+    startingPrice: tier.startingPrice,
+  };
+}
+
+export interface SerializedTierAssignment {
+  displayName: string;
+  id: string;
+  tierId: null | string;
 }

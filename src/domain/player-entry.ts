@@ -27,6 +27,8 @@ export interface PlayerEntry {
   startingPriceOverride: null | number;
   /** The Team this Player is preassigned to as its Player Representative. */
   teamId: null | string;
+  /** The Tier this Player belongs to under Tiered Rules. */
+  tierId: null | string;
   updatedAt: Date;
 }
 

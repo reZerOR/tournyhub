@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   RuleSetupError,
   saveSimpleRules,
+  saveTieredRules,
 } from "@/server/auction-command/rules";
 import { getRuleSetForOrganizer } from "@/server/auction-query/rules";
 import { getCurrentSession } from "@/server/auth/session";
@@ -49,6 +50,41 @@ export async function saveSimpleRulesAction(
 
   try {
     const ruleSet = await saveSimpleRules(
+      getPool(),
+      session.user.id,
+      auctionId,
+      input,
+    );
+    if (!ruleSet) return { message: NOT_EDITABLE, status: "error" };
+    return { ruleSet: serializeRuleSet(ruleSet), status: "saved" };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        message: error.issues[0]?.message ?? "Enter valid Rules.",
+        status: "error",
+      };
+    }
+    if (error instanceof RuleSetupError) {
+      return { message: error.message, status: "error" };
+    }
+    throw error;
+  }
+}
+
+export async function saveTieredRulesAction(
+  auctionId: string,
+  input: {
+    bidIncrement: string;
+    budget: string;
+    rosterMax: string;
+    rosterMin: string;
+  },
+): Promise<RulesResult> {
+  const session = await getCurrentSession();
+  if (!session) return { message: "Sign in to save changes.", status: "error" };
+
+  try {
+    const ruleSet = await saveTieredRules(
       getPool(),
       session.user.id,
       auctionId,

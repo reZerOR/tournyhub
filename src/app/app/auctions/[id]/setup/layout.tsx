@@ -24,7 +24,7 @@ export default async function AuctionSetupLayout({
         </p>
       </div>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[200px_1fr]">
-        <SetupNav auctionId={auction.id} />
+        <SetupNav auctionId={auction.id} rulesMode={auction.rulesMode} />
         <div>{children}</div>
       </div>
     </div>
