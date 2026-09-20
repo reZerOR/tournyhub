@@ -17,6 +17,11 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
+  // The beta permits exactly one Live Auction across the whole service, so two
+  // browser tests cannot be Live at the same time. One worker keeps the suite
+  // honest about that rule; each live spec also clears any leftover running
+  // Auction before it starts.
+  workers: 1,
   use: {
     baseURL,
     trace: "on-first-retry",

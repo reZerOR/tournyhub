@@ -23,6 +23,7 @@ export default async function RulesSetupPage({
   return (
     <RulesEditor
       auctionId={id}
+      closeMode={auction.closeMode}
       ruleSet={serializeRuleSet(ruleSet)}
       rulesMode={auction.rulesMode}
     />

@@ -9,6 +9,15 @@ import {
   cancelManualClose,
   finalizePresentation,
 } from "@/server/auction-command/close-player";
+import {
+  cancelHighestBid,
+  reverseSale,
+} from "@/server/auction-command/corrections";
+import {
+  completeAuction,
+  pauseAuction,
+  resumeAuction,
+} from "@/server/auction-command/lifecycle";
 import type { LiveCommandOutcome } from "@/server/auction-command/live-command";
 import { placeBid } from "@/server/auction-command/place-bid";
 import {
@@ -17,7 +26,14 @@ import {
   returnActivePlayer,
   selectPlayer,
 } from "@/server/auction-command/select-player";
+import {
+  activateTier,
+  closeUnsoldPool,
+  requestConstrainedMatching,
+  startUnsoldRound,
+} from "@/server/auction-command/tier-progress";
 import { getLiveSnapshot } from "@/server/auction-query/live-snapshot";
+import { loadOpenUnsoldRound } from "@/server/auction-query/progress";
 import { getCurrentSession } from "@/server/auth/session";
 import { getPool } from "@/server/database/pool";
 import {
@@ -44,7 +60,7 @@ function distributor(): CoalescingRealtimeDistributor {
 }
 
 export type LiveOutcomeView =
-  | { status: "accepted" | "replayed" }
+  | { notice?: string; status: "accepted" | "replayed" }
   | { message: string; reason: string; status: "rejected" }
   | { status: "unauthorized" };
 
@@ -53,9 +69,12 @@ export interface LiveActionPayload {
   snapshot: LiveSnapshot | null;
 }
 
-function viewOutcome(outcome: LiveCommandOutcome<unknown>): LiveOutcomeView {
+function viewOutcome(
+  outcome: LiveCommandOutcome<unknown>,
+  notice?: string,
+): LiveOutcomeView {
   if (outcome.status === "accepted" || outcome.status === "replayed") {
-    return { status: outcome.status };
+    return { notice, status: outcome.status };
   }
   if (outcome.status === "rejected") {
     return {
@@ -72,10 +91,14 @@ async function settle(
   auctionId: string,
   userId: string,
   outcome: LiveCommandOutcome<unknown>,
+  notice?: string,
 ): Promise<LiveActionPayload> {
   await publishPendingOutbox(getPool(), auctionId, distributor());
   const access = await getLiveSnapshot(getPool(), userId, auctionId);
-  return { outcome: viewOutcome(outcome), snapshot: access?.snapshot ?? null };
+  return {
+    outcome: viewOutcome(outcome, notice),
+    snapshot: access?.snapshot ?? null,
+  };
 }
 
 export async function loadSnapshotAction(
@@ -87,7 +110,7 @@ export async function loadSnapshotAction(
   return access?.snapshot ?? null;
 }
 
-/** The Players an Organizer may offer from the Active Tier, for manual selection. */
+/** The Players an Organizer may offer next, for manual selection. */
 export async function loadEligiblePlayersAction(
   auctionId: string,
 ): Promise<EligiblePlayer[] | null> {
@@ -113,6 +136,7 @@ export async function loadEligiblePlayersAction(
     `select "default_starting_price" from "auction_rule_set" where "auction_id" = $1`,
     [auctionId],
   );
+  const round = await loadOpenUnsoldRound(pool, auctionId);
 
   return loadEligiblePlayers(
     pool,
@@ -120,6 +144,7 @@ export async function loadEligiblePlayersAction(
     row.rules_mode,
     row.active_tier_id,
     rules.rows[0]?.default_starting_price ?? 0,
+    round?.id ?? null,
   );
 }
 
@@ -231,9 +256,14 @@ export async function cancelCloseAction(
   return settle(auctionId, session.user.id, outcome);
 }
 
+/**
+ * The due-only wake-up. Any participant's client may call it when a countdown
+ * reaches zero; the command finalizes only a Presentation whose database
+ * deadline has passed, and duplicate callers still produce one outcome.
+ */
 export async function finalizeAction(
   auctionId: string,
-  input: { presentationId: string },
+  input: { presentationId?: null | string },
 ): Promise<LiveActionPayload> {
   const session = await getCurrentSession();
   if (!session) return { outcome: { status: "unauthorized" }, snapshot: null };
@@ -242,7 +272,176 @@ export async function finalizeAction(
     actorUserId: session.user.id,
     auctionId,
     commandId: randomUUID(),
-    presentationId: input.presentationId,
+    presentationId: input.presentationId ?? null,
   });
   return settle(auctionId, session.user.id, outcome);
+}
+
+export async function pauseAction(
+  auctionId: string,
+  input: { expectedRevision: number },
+): Promise<LiveActionPayload> {
+  const session = await getCurrentSession();
+  if (!session) return { outcome: { status: "unauthorized" }, snapshot: null };
+
+  const outcome = await pauseAuction(getPool(), {
+    actorUserId: session.user.id,
+    auctionId,
+    commandId: randomUUID(),
+    expectedRevision: input.expectedRevision,
+  });
+  return settle(auctionId, session.user.id, outcome);
+}
+
+export async function resumeAction(
+  auctionId: string,
+  input: { expectedRevision: number },
+): Promise<LiveActionPayload> {
+  const session = await getCurrentSession();
+  if (!session) return { outcome: { status: "unauthorized" }, snapshot: null };
+
+  const outcome = await resumeAuction(getPool(), {
+    actorUserId: session.user.id,
+    auctionId,
+    commandId: randomUUID(),
+    expectedRevision: input.expectedRevision,
+  });
+  return settle(auctionId, session.user.id, outcome);
+}
+
+export async function activateTierAction(
+  auctionId: string,
+  input: { expectedRevision: number; tierId: string },
+): Promise<LiveActionPayload> {
+  const session = await getCurrentSession();
+  if (!session) return { outcome: { status: "unauthorized" }, snapshot: null };
+
+  const outcome = await activateTier(getPool(), {
+    actorUserId: session.user.id,
+    auctionId,
+    commandId: randomUUID(),
+    expectedRevision: input.expectedRevision,
+    tierId: input.tierId,
+  });
+  return settle(auctionId, session.user.id, outcome);
+}
+
+export async function startUnsoldRoundAction(
+  auctionId: string,
+  input: { expectedRevision: number },
+): Promise<LiveActionPayload> {
+  const session = await getCurrentSession();
+  if (!session) return { outcome: { status: "unauthorized" }, snapshot: null };
+
+  const outcome = await startUnsoldRound(getPool(), {
+    actorUserId: session.user.id,
+    auctionId,
+    commandId: randomUUID(),
+    expectedRevision: input.expectedRevision,
+  });
+  return settle(auctionId, session.user.id, outcome, "Unsold Round opened.");
+}
+
+export async function closeUnsoldPoolAction(
+  auctionId: string,
+  input: { expectedRevision: number },
+): Promise<LiveActionPayload> {
+  const session = await getCurrentSession();
+  if (!session) return { outcome: { status: "unauthorized" }, snapshot: null };
+
+  const outcome = await closeUnsoldPool(getPool(), {
+    actorUserId: session.user.id,
+    auctionId,
+    commandId: randomUUID(),
+    expectedRevision: input.expectedRevision,
+  });
+  return settle(
+    auctionId,
+    session.user.id,
+    outcome,
+    outcome.status === "accepted" && outcome.result.kind === "forced"
+      ? "Forced Assignment created."
+      : "Unsold Pool closed.",
+  );
+}
+
+export async function requestMatchingAction(
+  auctionId: string,
+  input: { expectedRevision: number },
+): Promise<LiveActionPayload> {
+  const session = await getCurrentSession();
+  if (!session) return { outcome: { status: "unauthorized" }, snapshot: null };
+
+  const outcome = await requestConstrainedMatching(getPool(), {
+    actorUserId: session.user.id,
+    auctionId,
+    commandId: randomUUID(),
+    expectedRevision: input.expectedRevision,
+  });
+  const count =
+    outcome.status === "accepted" ? outcome.result.assignments.length : 0;
+  return settle(
+    auctionId,
+    session.user.id,
+    outcome,
+    count === 1
+      ? "One Forced Assignment created."
+      : `${count} Forced Assignments created.`,
+  );
+}
+
+export async function completeAuctionAction(
+  auctionId: string,
+  input: { expectedRevision: number },
+): Promise<LiveActionPayload> {
+  const session = await getCurrentSession();
+  if (!session) return { outcome: { status: "unauthorized" }, snapshot: null };
+
+  const outcome = await completeAuction(getPool(), {
+    actorUserId: session.user.id,
+    auctionId,
+    commandId: randomUUID(),
+    expectedRevision: input.expectedRevision,
+  });
+  return settle(auctionId, session.user.id, outcome, "Auction completed.");
+}
+
+export async function cancelBidAction(
+  auctionId: string,
+  input: {
+    expectedRevision: number;
+    presentationId: string;
+    reason: string;
+  },
+): Promise<LiveActionPayload> {
+  const session = await getCurrentSession();
+  if (!session) return { outcome: { status: "unauthorized" }, snapshot: null };
+
+  const outcome = await cancelHighestBid(getPool(), {
+    actorUserId: session.user.id,
+    auctionId,
+    commandId: randomUUID(),
+    expectedRevision: input.expectedRevision,
+    presentationId: input.presentationId,
+    reason: input.reason,
+  });
+  return settle(auctionId, session.user.id, outcome, "Highest Bid cancelled.");
+}
+
+export async function reverseSaleAction(
+  auctionId: string,
+  input: { expectedRevision: number; reason: string; saleId: string },
+): Promise<LiveActionPayload> {
+  const session = await getCurrentSession();
+  if (!session) return { outcome: { status: "unauthorized" }, snapshot: null };
+
+  const outcome = await reverseSale(getPool(), {
+    actorUserId: session.user.id,
+    auctionId,
+    commandId: randomUUID(),
+    expectedRevision: input.expectedRevision,
+    reason: input.reason,
+    saleId: input.saleId,
+  });
+  return settle(auctionId, session.user.id, outcome, "Sale reversed.");
 }

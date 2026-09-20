@@ -67,17 +67,48 @@ export async function signIn(page: Page, email: string): Promise<void> {
 export async function createDraftAuction(
   page: Page,
   {
+    closeMode = "Manual Close",
     game = "Chess",
     rulesMode = "Simple Rules",
     title,
-  }: { game?: string; rulesMode?: string; title: string },
+  }: { closeMode?: string; game?: string; rulesMode?: string; title: string },
 ): Promise<void> {
   await page.getByRole("link", { name: "New Auction" }).click();
   await page.getByLabel("Title").fill(title);
   await page.getByLabel("Game").fill(game);
   await page.getByRole("button", { name: rulesMode }).click();
+  await page.getByRole("button", { name: closeMode }).click();
   await page.getByRole("button", { name: "Create Draft Auction" }).click();
   await expect(page).toHaveURL(/\/app\/auctions\/[^/]+\/setup\/basics$/);
+}
+
+export async function addTeam(page: Page, name: string): Promise<void> {
+  const addForm = page
+    .locator("form")
+    .filter({ has: page.getByRole("button", { name: "Add Team" }) });
+  await addForm.getByLabel("Team name").fill(name);
+  await addForm.getByRole("button", { name: "Add Team" }).click();
+  await expect(page.getByRole("cell", { name, exact: true })).toBeVisible();
+}
+
+export async function assignPlayerRepresentative(
+  page: Page,
+  teamName: string,
+  playerName: string,
+  email: string,
+): Promise<void> {
+  const row = page
+    .locator("li")
+    .filter({ hasText: teamName })
+    .filter({ has: page.getByLabel("Representative email") });
+  await row.getByLabel("Player Entry").selectOption({ label: playerName });
+  await row.getByLabel("Representative email").fill(email);
+  await row
+    .getByRole("button", { name: "Assign Player Representative" })
+    .click();
+  await expect(
+    page.getByText(`Player Representative: ${playerName}`),
+  ).toBeVisible();
 }
 
 export async function addPlayerEntry(

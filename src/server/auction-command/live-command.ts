@@ -62,6 +62,15 @@ export interface StoredCommand<T> {
   result: T;
 }
 
+/** A rejected live command with a stable reason code and a safe revision. */
+export function rejection<T>(
+  message: string,
+  reason: string,
+  revision: number,
+): LiveCommandOutcome<T> {
+  return { message, reason, revision, status: "rejected" };
+}
+
 /** The originally stored result for a command ID, or null when it is new. */
 export async function findStoredCommand<T>(
   client: PoolClient,

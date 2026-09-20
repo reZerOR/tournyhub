@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 
 import {
+  ANTI_SNIPE_SECONDS,
   BID_REJECTION_MESSAGES,
   nextBidAmount,
   type BidRejectionReason,
@@ -375,7 +376,10 @@ export async function placeBid(
     }
 
     // A valid Bid during a Manual Close warning cancels the warning and reopens
-    // bidding in the same transaction.
+    // bidding in the same transaction. A valid Bid inside the final seconds of
+    // a Timed Close moves the deadline to database time plus the response
+    // window, so a last-second Bid always allows a reply.
+    let closeDeadline: null | Date = current.close_deadline;
     if (current.state === "closing" || current.warning_deadline) {
       await client.query(
         `update "player_presentation"
@@ -383,6 +387,20 @@ export async function placeBid(
           where "id" = $1`,
         [current.id],
       );
+    } else if (
+      current.close_deadline &&
+      now.getTime() >=
+        current.close_deadline.getTime() - ANTI_SNIPE_SECONDS * 1000
+    ) {
+      const extended = await client.query<{ close_deadline: Date }>(
+        `update "player_presentation"
+            set "close_deadline" = now() + ($2 || ' seconds')::interval,
+                "updated_at" = now()
+          where "id" = $1
+          returning "close_deadline"`,
+        [current.id, String(ANTI_SNIPE_SECONDS)],
+      );
+      closeDeadline = extended.rows[0]!.close_deadline;
     }
 
     const revision = await bumpRevision(
@@ -391,6 +409,7 @@ export async function placeBid(
       "bid_accepted",
       {
         amount,
+        closeDeadline: closeDeadline?.toISOString() ?? null,
         presentationId: current.id,
         teamId: input.teamId,
       },

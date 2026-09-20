@@ -1,3 +1,4 @@
+import { DEFAULT_TIMED_CLOSE_SECONDS } from "@/domain/live";
 import type { AuctionRuleSet } from "@/domain/rules";
 import { isEditableAuction } from "@/server/auction-query/editable";
 import type { Queryable } from "@/server/database/queryable";
@@ -9,6 +10,7 @@ export interface RuleSetRow {
   default_starting_price: null | number;
   roster_max: null | number;
   roster_min: null | number;
+  timed_close_seconds: number;
   updated_at: Date;
 }
 
@@ -20,6 +22,7 @@ export function mapRuleSetRow(row: RuleSetRow): AuctionRuleSet {
     defaultStartingPrice: row.default_starting_price,
     rosterMax: row.roster_max,
     rosterMin: row.roster_min,
+    timedCloseSeconds: row.timed_close_seconds,
     updatedAt: row.updated_at,
   };
 }
@@ -33,6 +36,7 @@ export function emptyRuleSet(auctionId: string): AuctionRuleSet {
     defaultStartingPrice: null,
     rosterMax: null,
     rosterMin: null,
+    timedCloseSeconds: DEFAULT_TIMED_CLOSE_SECONDS,
     updatedAt: new Date(0),
   };
 }

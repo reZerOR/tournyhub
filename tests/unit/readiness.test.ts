@@ -11,6 +11,7 @@ function ruleSet(overrides: Partial<AuctionRuleSet> = {}): AuctionRuleSet {
     defaultStartingPrice: 10,
     rosterMax: 3,
     rosterMin: 2,
+    timedCloseSeconds: 30,
     updatedAt: new Date(),
     ...overrides,
   };

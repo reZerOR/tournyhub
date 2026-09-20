@@ -99,13 +99,107 @@ export type CloseRejectionReason = (typeof CLOSE_REJECTION_REASONS)[number];
 export const CLOSE_REJECTION_MESSAGES: Record<CloseRejectionReason, string> = {
   already_closing: "A closing warning is already running.",
   auction_not_live: "The Auction is not running.",
-  not_closing: "No closing warning is running for this Player.",
+  not_closing: "No closing deadline is running for this Player.",
   not_manual_close: "This Auction uses Timed Close, not Manual Close.",
   not_organizer: "Only the Organizer can control closing.",
   presentation_missing: "There is no Active Player to close.",
   stale_revision: "The Auction changed. Refresh before closing.",
-  too_early: "The closing warning has not finished yet.",
+  too_early: "This Player's deadline has not arrived yet.",
 };
+
+/**
+ * The stable reasons a lifecycle, Tier-progression, or unsold-resolution
+ * command is rejected. These commands never accept a Bid, so they do not
+ * share the Bid vocabulary.
+ */
+export const LIFECYCLE_REJECTION_REASONS = [
+  "not_organizer",
+  "auction_not_live",
+  "auction_not_paused",
+  "stale_revision",
+  "already_paused",
+  "not_paused",
+  "presentation_active",
+  "tier_not_in_auction",
+  "no_next_tier",
+  "tier_progress_incomplete",
+  "unsold_round_open",
+  "unsold_pool_open",
+  "no_unsold_round",
+  "no_eligible_players",
+  "matching_required",
+  "no_feasible_matching",
+  "minimums_unresolved",
+  "auction_incomplete",
+] as const;
+
+export type LifecycleRejectionReason =
+  (typeof LIFECYCLE_REJECTION_REASONS)[number];
+
+export const LIFECYCLE_REJECTION_MESSAGES: Record<
+  LifecycleRejectionReason,
+  string
+> = {
+  already_paused: "The Auction is already paused.",
+  auction_incomplete:
+    "The Auction cannot complete while a Player, Tier, Unsold Pool entry, or Team minimum is unresolved.",
+  auction_not_live: "The Auction is not running.",
+  auction_not_paused: "Pause the Auction before this change.",
+  matching_required:
+    "Several Teams and Players remain unresolved. Request constrained matching instead.",
+  minimums_unresolved:
+    "A Team still misses a required minimum. Resolve it with a Forced Assignment or constrained matching.",
+  no_eligible_players: "The Unsold Pool has no eligible Player to offer.",
+  no_feasible_matching:
+    "No complete assignment satisfies every Team's Budget, minimums, and maximums.",
+  no_next_tier: "No later Tier remains to activate.",
+  no_unsold_round: "No Unsold Round is open.",
+  not_organizer: "Only the Organizer can do that.",
+  not_paused: "The Auction is not paused.",
+  presentation_active: "Finish or return the Active Player first.",
+  stale_revision: "The Auction changed. Refresh before continuing.",
+  tier_not_in_auction: "That Tier is not in this Auction.",
+  tier_progress_incomplete:
+    "Every Player in the current Tier must be offered once before the Auction moves on.",
+  unsold_pool_open:
+    "The Unsold Pool still holds unresolved Players. Close it or resolve them first.",
+  unsold_round_open: "An Unsold Round is already open.",
+};
+
+/** The stable reasons a correction is rejected. */
+export const CORRECTION_REJECTION_REASONS = [
+  "not_organizer",
+  "auction_not_paused",
+  "stale_revision",
+  "presentation_missing",
+  "no_bid",
+  "sale_missing",
+  "already_reversed",
+  "no_legal_completion",
+  "reason_required",
+] as const;
+
+export type CorrectionRejectionReason =
+  (typeof CORRECTION_REJECTION_REASONS)[number];
+
+export const CORRECTION_REJECTION_MESSAGES: Record<
+  CorrectionRejectionReason,
+  string
+> = {
+  already_reversed: "That Sale is already reversed.",
+  auction_not_paused: "Pause the Auction before correcting it.",
+  no_bid: "There is no accepted Bid to cancel.",
+  no_legal_completion:
+    "That correction would leave no Legal Completion. Resolve the Auction first.",
+  not_organizer: "Only the Organizer can correct the Auction.",
+  presentation_missing: "That Player is no longer Active.",
+  reason_required: "Enter a reason of at most 200 characters.",
+  sale_missing: "That Sale is not part of this Auction.",
+  stale_revision: "The Auction changed. Refresh before correcting.",
+};
+
+/** The maximum length of an Organizer-supplied correction reason. */
+export const CORRECTION_REASON_MAX = 200;
 
 /** The committed outcome of a finalized Player Presentation. */
 export type PresentationOutcome =
@@ -148,16 +242,51 @@ export interface LiveTeamPublicState {
 }
 
 export interface LiveActivePlayer {
+  /**
+   * The authoritative Timed Close deadline, or null when no countdown runs.
+   * A browser countdown must be derived from this and never from its own clock.
+   */
+  closeDeadline: null | string;
   displayName: string;
   presentationId: string;
   playerEntryId: string;
   role: null | string;
-  selectionMethod: "manual" | "random";
+  selectionMethod: "forced" | "manual" | "random";
   startingPrice: number;
   state: "closing" | "open";
   tierId: null | string;
   tierLabel: null | string;
+  /** The Manual Close warning deadline, or null when no warning runs. */
   warningDeadline: null | string;
+}
+
+/** The progress of one Tier towards finishing. */
+export interface LiveTierProgress {
+  biddableCount: number;
+  complete: boolean;
+  id: string;
+  isActive: boolean;
+  label: string;
+  offeredCount: number;
+  position: number;
+}
+
+/** The open Unsold Round, if any. */
+export interface LiveUnsoldRound {
+  eligibleCount: number;
+  id: string;
+  offeredCount: number;
+  sequence: number;
+}
+
+/** A committed Sale the Organizer may still reverse. */
+export interface LiveSale {
+  amount: number;
+  playerDisplayName: string;
+  playerEntryId: string;
+  saleId: string;
+  source: "bid" | "forced";
+  teamId: string;
 }
 
 export interface LiveCallerPrivateState {
@@ -178,16 +307,37 @@ export interface LiveSnapshot {
   auctionId: string;
   closeMode: CloseMode;
   currentBid: null | { amount: number; teamId: string };
+  /** Teams that still miss a required total or Tier minimum. */
+  deficientTeamIds: string[];
+  /** Players still eligible for the Active Tier or Unsold Round. */
+  eligiblePlayerCount: number;
   lifecycle: LiveStatus;
   nextBidAmount: null | number;
+  /** The next Tier the Organizer may activate, if one exists. */
+  nextTierId: null | string;
+  /** Unreversed Sales the Organizer may reverse while Paused. */
+  openSales: LiveSale[];
   revision: number;
   rulesMode: RulesMode;
   serverTime: string;
   teams: LiveTeamPublicState[];
   tierCountsEnabled: boolean;
+  tiers: LiveTierProgress[];
+  /** The whole-second Timed Close duration, or null under Manual Close. */
+  timedCloseSeconds: null | number;
+  /** Unresolved memberships in the Unsold Pool. */
+  unsoldPoolCount: number;
+  unsoldRound: LiveUnsoldRound | null;
   you: LiveCallerPrivateState;
   /** Private rejected details: every Team's for the Organizer, own Team's for a Representative. */
   rejections: LiveBidRejection[];
-  /** Players still eligible for the Active Tier or Unsold Round. */
-  eligiblePlayerCount: number;
 }
+
+/**
+ * The default Timed Close duration in whole seconds. The Organizer may raise
+ * or lower it before the Auction starts.
+ */
+export const DEFAULT_TIMED_CLOSE_SECONDS = 30;
+
+/** The Timed Close response window: a final-seconds Bid moves the deadline. */
+export const ANTI_SNIPE_SECONDS = 5;

@@ -7,8 +7,18 @@ import {
   type LiveCallerPrivateState,
   type LiveSnapshot,
   type LiveTeamPublicState,
+  type LiveTierProgress,
 } from "@/domain/live";
 import type { BidRejectionReason } from "@/domain/live";
+import { deficientTeamIds } from "@/domain/matching";
+import {
+  loadOpenSales,
+  loadOpenUnsoldRound,
+  loadRoundOfferedPlayerIds,
+  loadTeamMinimumStates,
+  loadTierProgress,
+  loadUnsoldPool,
+} from "@/server/auction-query/progress";
 import type { Queryable } from "@/server/database/queryable";
 
 interface AuctionRow {
@@ -21,11 +31,12 @@ interface AuctionRow {
 }
 
 interface PresentationRow {
+  close_deadline: Date | null;
   display_name: string;
   id: string;
   player_entry_id: string;
   role: null | string;
-  selection_method: "manual" | "random";
+  selection_method: "forced" | "manual" | "random";
   starting_price: number;
   state: "closing" | "open";
   tier_id: null | string;
@@ -149,7 +160,8 @@ export async function getLiveSnapshot(
     db.query<PresentationRow>(
       `select pp."id", pp."player_entry_id", pp."tier_id", pp."starting_price",
               pp."selection_method", pp."state", pp."warning_deadline",
-              pe."display_name", pe."role", t."label" as tier_label
+              pp."close_deadline", pe."display_name", pe."role",
+              t."label" as tier_label
          from "player_presentation" pp
          join "player_entry" pe on pe."id" = pp."player_entry_id"
          left join "tier" t on t."id" = pp."tier_id"
@@ -276,6 +288,7 @@ export async function getLiveSnapshot(
   );
   const budget = rules.rows[0]?.budget ?? 0;
   const rosterMax = rules.rows[0]?.roster_max ?? 0;
+  const rosterMin = rules.rows[0]?.roster_min ?? 0;
 
   for (const team of teams) {
     const spend = spendByTeam.get(team.id);
@@ -320,6 +333,9 @@ export async function getLiveSnapshot(
 
   const activePlayer: LiveActivePlayer | null = presentation
     ? {
+        closeDeadline: presentation.close_deadline
+          ? presentation.close_deadline.toISOString()
+          : null,
         displayName: presentation.display_name,
         presentationId: presentation.id,
         playerEntryId: presentation.player_entry_id,
@@ -335,8 +351,12 @@ export async function getLiveSnapshot(
       }
     : null;
 
-  const increment = await db.query<{ bid_increment: null | number }>(
-    `select "bid_increment" from "auction_rule_set" where "auction_id" = $1`,
+  const increment = await db.query<{
+    bid_increment: null | number;
+    timed_close_seconds: number;
+  }>(
+    `select "bid_increment", "timed_close_seconds"
+       from "auction_rule_set" where "auction_id" = $1`,
     [auctionId],
   );
   const bidIncrement = increment.rows[0]?.bid_increment ?? 0;
@@ -346,6 +366,45 @@ export async function getLiveSnapshot(
         currentAmount: currentBid?.amount ?? null,
         startingPrice: presentation.starting_price,
       })
+    : null;
+
+  const [progress, openRound, pool, openSales] = await Promise.all([
+    loadTierProgress(db, auctionId),
+    loadOpenUnsoldRound(db, auctionId),
+    loadUnsoldPool(db, auctionId, 0),
+    loadOpenSales(db, auctionId),
+  ]);
+
+  const orderedTierIds = tiers.map((tier) => tier.id);
+  const minimumStates = await loadTeamMinimumStates(
+    db,
+    auctionId,
+    orderedTierIds,
+  );
+  const deficient = deficientTeamIds({
+    rosterMin: rosterMin ?? 0,
+    teams: minimumStates,
+    tiers: tiers.map((tier) => ({ minPerTeam: tier.min_per_team })),
+  });
+
+  const liveTiers: LiveTierProgress[] = progress.map((tier) => ({
+    biddableCount: tier.biddableCount,
+    complete: tier.offeredCount >= tier.biddableCount,
+    id: tier.id,
+    isActive: tier.id === auction.active_tier_id,
+    label: tier.label,
+    offeredCount: tier.offeredCount,
+    position: tier.position,
+  }));
+  const nextTier = liveTiers.find((tier) => !tier.complete) ?? null;
+
+  const round = openRound
+    ? {
+        eligibleCount: pool.length,
+        id: openRound.id,
+        offeredCount: (await loadRoundOfferedPlayerIds(db, openRound.id)).size,
+        sequence: openRound.sequence,
+      }
     : null;
 
   const eligible = await db.query<{ count: number }>(
@@ -376,14 +435,24 @@ export async function getLiveSnapshot(
       currentBid: currentBid
         ? { amount: currentBid.amount, teamId: currentBid.team_id }
         : null,
+      deficientTeamIds: deficient,
       eligiblePlayerCount: eligible.rows[0]?.count ?? 0,
       lifecycle: auction.status === "paused" ? "paused" : "live",
       nextBidAmount: nextBid,
+      nextTierId: nextTier?.id ?? null,
+      openSales,
       revision: auction.revision,
       rulesMode: auction.rules_mode,
       serverTime: timeResult.rows[0]!.now.toISOString(),
       teams,
       tierCountsEnabled: auction.rules_mode === "tiered",
+      tiers: liveTiers,
+      timedCloseSeconds:
+        auction.close_mode === "timed"
+          ? (increment.rows[0]?.timed_close_seconds ?? null)
+          : null,
+      unsoldPoolCount: pool.length,
+      unsoldRound: round,
       you,
       rejections,
     },

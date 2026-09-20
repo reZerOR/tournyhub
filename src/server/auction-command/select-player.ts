@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 
 import type { RulesMode } from "@/domain/auction";
@@ -15,6 +14,8 @@ import {
   storeCommand,
   writeAuditEntry,
 } from "@/server/auction-command/live-command";
+import { secureFraction } from "@/server/auction-command/secure-random";
+import { loadOpenUnsoldRound } from "@/server/auction-query/progress";
 import type { Queryable } from "@/server/database/queryable";
 
 export interface EligiblePlayer {
@@ -25,6 +26,7 @@ export interface EligiblePlayer {
 }
 
 export interface SelectPlayerResult {
+  closeDeadline: null | string;
   displayName: string;
   playerEntryId: string;
   presentationId: string;
@@ -45,20 +47,14 @@ export interface SelectPlayerInput {
   selectionMethod: "manual" | "random";
 }
 
-/** 48 bits of entropy, plenty to choose uniformly among at most 2,000 Players. */
-function secureFraction(): number {
-  const bytes = randomBytes(6);
-  let value = 0;
-  for (const byte of bytes) {
-    value = value * 256 + byte;
-  }
-  return value / 2 ** 48;
-}
-
 /**
- * The Players eligible to be offered: unoffered or returned biddable Players
- * in the Active Tier, or every such Player under Simple Rules. A Player already
- * Sold, Unsold, or currently offered is not eligible.
+ * The Players eligible to be offered. Normally they are the unoffered or
+ * returned biddable Players in the Active Tier, or every such Player under
+ * Simple Rules. While an Unsold Round is open, they are instead the unresolved
+ * Unsold Pool Players that the round has not completed yet.
+ *
+ * A Player offered again keeps the Starting Price frozen when it was first
+ * offered, so reoffering cannot change the price.
  */
 export async function loadEligiblePlayers(
   client: Queryable,
@@ -66,54 +62,94 @@ export async function loadEligiblePlayers(
   rulesMode: RulesMode,
   activeTierId: null | string,
   defaultStartingPrice: number,
+  unsoldRoundId: null | string = null,
 ): Promise<EligiblePlayer[]> {
+  const restrictTier = rulesMode === "tiered" && unsoldRoundId === null;
   const result = await client.query<{
     display_name: string;
+    frozen_starting_price: null | number;
     id: string;
     starting_price_override: null | number;
     tier_id: null | string;
     tier_starting_price: null | number;
   }>(
     `select pe."id", pe."display_name", pe."starting_price_override",
-            pe."tier_id", t."starting_price" as tier_starting_price
+            pe."tier_id", t."starting_price" as tier_starting_price,
+            first_presentation."starting_price" as frozen_starting_price
        from "player_entry" pe
        left join "tier" t on t."id" = pe."tier_id"
+       left join lateral (
+         select pp."starting_price" from "player_presentation" pp
+          where pp."player_entry_id" = pe."id"
+          order by pp."opened_at" asc, pp."created_at" asc
+          limit 1
+       ) first_presentation on true
       where pe."auction_id" = $1
         and not pe."is_representative"
-        and ($2 = false or pe."tier_id" = $3)
         and not exists (
           select 1 from "player_presentation" pp
            where pp."player_entry_id" = pe."id"
-             and pp."state" in ('open', 'closing', 'sold', 'unsold'))
+             and pp."state" in ('open', 'closing'))
         and not exists (
           select 1 from "sale" s
            where s."player_entry_id" = pe."id" and s."reversed_at" is null)
+        and (
+          (
+            $4::uuid is null
+            and ($2 = false or pe."tier_id" = $3)
+            and not exists (
+              select 1 from "player_presentation" tp
+               where tp."player_entry_id" = pe."id"
+                 and tp."state" in ('sold', 'unsold'))
+          )
+          or (
+            $4::uuid is not null
+            and exists (
+              select 1 from "unsold_membership" um
+               where um."player_entry_id" = pe."id"
+                 and um."resolved_at" is null)
+            and not exists (
+              select 1 from "player_presentation" rp
+               where rp."player_entry_id" = pe."id"
+                 and rp."unsold_round_id" = $4
+                 and rp."state" in ('sold', 'unsold'))
+          )
+        )
       order by pe."created_at" asc, pe."id" asc`,
-    [auctionId, rulesMode === "tiered", activeTierId],
+    [auctionId, restrictTier, activeTierId, unsoldRoundId],
   );
 
   return result.rows.map((row) => ({
     displayName: row.display_name,
     id: row.id,
-    startingPrice: resolveOfferedStartingPrice({
-      defaultStartingPrice,
-      startingPriceOverride: row.starting_price_override,
-      tierStartingPrice:
-        rulesMode === "tiered" ? row.tier_starting_price : null,
-    }),
+    startingPrice:
+      row.frozen_starting_price ??
+      resolveOfferedStartingPrice({
+        defaultStartingPrice,
+        startingPriceOverride: row.starting_price_override,
+        tierStartingPrice:
+          rulesMode === "tiered" ? row.tier_starting_price : null,
+      }),
     tierId: row.tier_id,
   }));
 }
 
-async function defaultStartingPrice(
+async function loadCloseSettings(
   client: PoolClient,
   auctionId: string,
-): Promise<number> {
-  const result = await client.query<{ default_starting_price: null | number }>(
-    `select "default_starting_price" from "auction_rule_set" where "auction_id" = $1`,
+): Promise<{ defaultStartingPrice: number; timedCloseSeconds: number }> {
+  const result = await client.query<{
+    default_starting_price: null | number;
+    timed_close_seconds: number;
+  }>(
+    `select "default_starting_price", "timed_close_seconds"
+       from "auction_rule_set" where "auction_id" = $1`,
     [auctionId],
   );
-  return result.rows[0]?.default_starting_price ?? 0;
+  return {
+    defaultStartingPrice: result.rows[0]?.default_starting_price ?? 0,
+    timedCloseSeconds: result.rows[0]?.timed_close_seconds ?? 30,
+  };
 }
 
 function rejected(
@@ -131,9 +167,10 @@ function rejected(
 /**
  * Offers one Player. Manual selection names the Player; Random Selection
  * chooses uniformly among the same eligible set and records the method and
- * result for audit. Only the Organizer may select. A committed selection
- * advances the revision exactly once and appears to every participant only
- * after commit.
+ * result for audit. Only the Organizer may select. A Timed Close Auction
+ * stores the database deadline for the new Presentation in the same
+ * transaction. A committed selection advances the revision exactly once and
+ * appears to every participant only after commit.
  */
 export async function selectPlayer(
   pool: Pool,
@@ -187,13 +224,15 @@ export async function selectPlayer(
       return rejected("presentation_active", auction.revision);
     }
 
-    const fallback = await defaultStartingPrice(client, input.auctionId);
+    const round = await loadOpenUnsoldRound(client, input.auctionId);
+    const settings = await loadCloseSettings(client, input.auctionId);
     const eligible = await loadEligiblePlayers(
       client,
       input.auctionId,
       auction.rulesMode,
       auction.activeTierId,
-      fallback,
+      settings.defaultStartingPrice,
+      round?.id ?? null,
     );
     if (eligible.length === 0) {
       await client.query("rollback");
@@ -216,12 +255,20 @@ export async function selectPlayer(
       return rejected("not_eligible", auction.revision);
     }
 
-    const inserted = await client.query<{ id: string }>(
+    const inserted = await client.query<{
+      close_deadline: Date | null;
+      id: string;
+    }>(
       `insert into "player_presentation"
           ("auction_id", "player_entry_id", "tier_id", "starting_price",
-           "selection_method", "state", "close_mode")
-       values ($1, $2, $3, $4, $5, 'open', $6)
-       returning "id"`,
+           "selection_method", "state", "close_mode", "close_deadline",
+           "unsold_round_id")
+       values ($1, $2, $3, $4, $5, 'open', $6,
+               case when $6 = 'timed'
+                    then now() + ($7 || ' seconds')::interval
+                    else null end,
+               $8)
+       returning "id", "close_deadline"`,
       [
         input.auctionId,
         chosen.id,
@@ -229,19 +276,25 @@ export async function selectPlayer(
         chosen.startingPrice,
         input.selectionMethod,
         auction.closeMode,
+        String(settings.timedCloseSeconds),
+        round?.id ?? null,
       ],
     );
+    const closeDeadline =
+      inserted.rows[0]!.close_deadline?.toISOString() ?? null;
 
     const revision = await bumpRevision(
       client,
       input.auctionId,
       "player_presented",
       {
+        closeDeadline,
         playerEntryId: chosen.id,
         presentationId: inserted.rows[0]!.id,
         selectionMethod: input.selectionMethod,
         startingPrice: chosen.startingPrice,
         tierId: chosen.tierId,
+        unsoldRoundId: round?.id ?? null,
       },
     );
     await writeAuditEntry(client, {
@@ -259,6 +312,7 @@ export async function selectPlayer(
     });
 
     const result: SelectPlayerResult = {
+      closeDeadline,
       displayName: chosen.displayName,
       playerEntryId: chosen.id,
       presentationId: inserted.rows[0]!.id,
@@ -372,7 +426,8 @@ export async function returnActivePlayer(
     await client.query(
       `update "player_presentation"
           set "state" = 'returned', "return_reason" = $3, "closed_at" = now(),
-              "warning_deadline" = null, "updated_at" = now()
+              "warning_deadline" = null, "close_deadline" = null,
+              "updated_at" = now()
         where "id" = $1 and "auction_id" = $2`,
       [input.presentationId, input.auctionId, reason],
     );

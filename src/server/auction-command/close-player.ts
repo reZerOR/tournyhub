@@ -26,16 +26,23 @@ interface PresentationRow {
   warning_deadline: Date | null;
 }
 
+/**
+ * The named Presentation, or the one the Auction last offered when no id is
+ * given. The second form is what a due-only wake-up request resolves.
+ */
 async function loadPresentation(
   client: PoolClient,
   auctionId: string,
-  presentationId: string,
+  presentationId: null | string,
 ): Promise<null | PresentationRow> {
   const result = await client.query<PresentationRow>(
-    `select "id", "player_entry_id", "tier_id", "state", "warning_deadline",
-            "close_deadline"
-       from "player_presentation" where "id" = $1 and "auction_id" = $2`,
-    [presentationId, auctionId],
+    `select "id", "player_entry_id", "tier_id", "state",
+            "warning_deadline", "close_deadline"
+       from "player_presentation"
+      where "auction_id" = $1 and ($2::uuid is null or "id" = $2)
+      order by "opened_at" desc, "created_at" desc
+      limit 1`,
+    [auctionId, presentationId],
   );
   return result.rows[0] ?? null;
 }
@@ -241,7 +248,12 @@ export interface FinalizeInput {
   actorUserId: string;
   auctionId: string;
   commandId: string;
-  presentationId: string;
+  /**
+   * The Presentation to finalize. Omit it to finalize whichever Presentation
+   * the Auction last offered, which is how any eligible wake-up request
+   * triggers due-only finalization.
+   */
+  presentationId?: null | string;
 }
 
 async function existingOutcome(
@@ -279,6 +291,11 @@ async function existingOutcome(
  * becomes a Sale; a Presentation with no valid Bid becomes Unsold and enters
  * the Unsold Pool. A duplicate finalizer or a repeated command ID returns the
  * one committed outcome and creates no second Sale, revision, or Sale row.
+ *
+ * Finalization is due-only: a Manual Close Presentation must have reached its
+ * warning deadline, and a Timed Close Presentation its close deadline. It is
+ * refused while the Auction is Paused, because Pausing clears the running
+ * deadline and Resuming creates a new one.
  */
 export async function finalizePresentation(
   pool: Pool,
@@ -325,7 +342,7 @@ export async function finalizePresentation(
     const presentation = await loadPresentation(
       client,
       input.auctionId,
-      input.presentationId,
+      input.presentationId ?? null,
     );
     if (!presentation) {
       await client.query("rollback");
@@ -353,21 +370,27 @@ export async function finalizePresentation(
       };
     }
 
-    if (presentation.state !== "closing") {
+    if (presentation.state !== "closing" && presentation.state !== "open") {
+      await client.query("rollback");
+      return closeReject("not_closing", auction.revision);
+    }
+    if (auction.status !== "live") {
+      await client.query("rollback");
+      return closeReject("auction_not_live", auction.revision);
+    }
+
+    const deadline =
+      presentation.state === "closing"
+        ? presentation.warning_deadline
+        : presentation.close_deadline;
+    if (!deadline) {
       await client.query("rollback");
       return closeReject("not_closing", auction.revision);
     }
     const time = await client.query<{ now: Date }>(`select now() as now`);
-    if (
-      presentation.warning_deadline &&
-      time.rows[0]!.now < presentation.warning_deadline
-    ) {
+    if (time.rows[0]!.now < deadline) {
       await client.query("rollback");
       return closeReject("too_early", auction.revision);
-    }
-    if (auction.status !== "live" && auction.status !== "paused") {
-      await client.query("rollback");
-      return closeReject("auction_not_live", auction.revision);
     }
 
     const leader = await client.query<{ amount: number; team_id: string }>(
@@ -395,10 +418,19 @@ export async function finalizePresentation(
           winning.amount,
         ],
       );
+      // A Player reoffered from the Unsold Pool leaves it for good once the
+      // Sale commits.
+      await client.query(
+        `update "unsold_membership"
+            set "resolved_at" = now(), "resolution" = 'assigned', "sale_id" = $2
+          where "player_entry_id" = $1 and "resolved_at" is null`,
+        [presentation.player_entry_id, sale.rows[0]!.id],
+      );
       await client.query(
         `update "player_presentation"
             set "state" = 'sold', "closed_at" = now(), "warning_deadline" = null,
-                "updated_at" = now()
+                "close_deadline" = null, "paused_state" = null,
+                "paused_remaining_ms" = null, "updated_at" = now()
           where "id" = $1`,
         [presentation.id],
       );
@@ -414,7 +446,13 @@ export async function finalizePresentation(
         `insert into "unsold_membership"
             ("player_entry_id", "auction_id", "tier_id", "presentation_id")
          values ($1, $2, $3, $4)
-         on conflict ("player_entry_id") do nothing`,
+         on conflict ("player_entry_id") do update
+           set "auction_id" = excluded."auction_id",
+               "tier_id" = excluded."tier_id",
+               "presentation_id" = excluded."presentation_id",
+               "resolved_at" = null,
+               "resolution" = null,
+               "sale_id" = null`,
         [
           presentation.player_entry_id,
           input.auctionId,
@@ -425,7 +463,8 @@ export async function finalizePresentation(
       await client.query(
         `update "player_presentation"
             set "state" = 'unsold', "closed_at" = now(), "warning_deadline" = null,
-                "updated_at" = now()
+                "close_deadline" = null, "paused_state" = null,
+                "paused_remaining_ms" = null, "updated_at" = now()
           where "id" = $1`,
         [presentation.id],
       );

@@ -15,6 +15,7 @@ function ruleSet(overrides: Partial<AuctionRuleSet> = {}): AuctionRuleSet {
     defaultStartingPrice: 10,
     rosterMax: 4,
     rosterMin: 2,
+    timedCloseSeconds: 30,
     updatedAt: new Date(),
     ...overrides,
   };
@@ -36,7 +37,35 @@ describe("simpleRulesInputSchema", () => {
       defaultStartingPrice: 10,
       rosterMax: 4,
       rosterMin: 2,
+      timedCloseSeconds: 30,
     });
+  });
+
+  it("keeps the 30-second Timed Close default and accepts a custom duration", () => {
+    const base = {
+      budget: "100",
+      bidIncrement: "5",
+      defaultStartingPrice: "10",
+      rosterMax: "4",
+      rosterMin: "2",
+    };
+
+    expect(simpleRulesInputSchema.parse(base).timedCloseSeconds).toBe(30);
+    expect(
+      simpleRulesInputSchema.parse({ ...base, timedCloseSeconds: "" })
+        .timedCloseSeconds,
+    ).toBe(30);
+    expect(
+      simpleRulesInputSchema.parse({ ...base, timedCloseSeconds: "45" })
+        .timedCloseSeconds,
+    ).toBe(45);
+    for (const value of ["0", "-1", "1.5", "3601", "soon"]) {
+      expect(
+        simpleRulesInputSchema.safeParse({ ...base, timedCloseSeconds: value })
+          .success,
+        value,
+      ).toBe(false);
+    }
   });
 
   it("rejects zero, fractions, and text", () => {

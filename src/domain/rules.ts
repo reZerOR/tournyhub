@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { DEFAULT_TIMED_CLOSE_SECONDS } from "@/domain/live";
 import { PLAYER_ENTRY_LIMITS } from "@/domain/player-entry";
 
 export const RULE_LIMITS = {
@@ -7,6 +8,8 @@ export const RULE_LIMITS = {
   bidIncrementMax: 1_000_000,
   defaultStartingPriceMax: PLAYER_ENTRY_LIMITS.startingPriceMax,
   rosterMax: PLAYER_ENTRY_LIMITS.maxEntriesPerAuction,
+  timedCloseSecondsMax: 3600,
+  timedCloseSecondsMin: 1,
 } as const;
 
 export interface AuctionRuleSet {
@@ -16,6 +19,12 @@ export interface AuctionRuleSet {
   defaultStartingPrice: null | number;
   rosterMax: null | number;
   rosterMin: null | number;
+  /**
+   * The whole-second Timed Close countdown every Player uses. It has a
+   * database default, so it is always present even before the Organizer
+   * configures Rules.
+   */
+  timedCloseSeconds: number;
   updatedAt: Date;
 }
 
@@ -40,6 +49,35 @@ function wholeNumber(
       .max(max, maximumMessage),
   );
 }
+
+/**
+ * The Timed Close countdown length. A blank value keeps the 30-second
+ * default so an Organizer switching to Timed Close is never blocked.
+ */
+export const timedCloseSecondsSchema = z.preprocess(
+  (value) => {
+    if (value === null || value === undefined) {
+      return DEFAULT_TIMED_CLOSE_SECONDS;
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.length === 0) return DEFAULT_TIMED_CLOSE_SECONDS;
+      return /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN;
+    }
+    return value;
+  },
+  z
+    .number()
+    .int("Enter a whole number of seconds.")
+    .min(
+      RULE_LIMITS.timedCloseSecondsMin,
+      "Timed Close must last at least 1 second.",
+    )
+    .max(
+      RULE_LIMITS.timedCloseSecondsMax,
+      `Timed Close must last at most ${RULE_LIMITS.timedCloseSecondsMax} seconds.`,
+    ),
+);
 
 export const simpleRulesInputSchema = z
   .object({
@@ -67,6 +105,9 @@ export const simpleRulesInputSchema = z
       RULE_LIMITS.rosterMax,
       "Minimum Roster size must be at least 1.",
       `Minimum Roster size must be at most ${RULE_LIMITS.rosterMax}.`,
+    ),
+    timedCloseSeconds: timedCloseSecondsSchema.default(
+      DEFAULT_TIMED_CLOSE_SECONDS,
     ),
   })
   .refine((value) => value.rosterMin <= value.rosterMax, {
@@ -102,6 +143,9 @@ export const tieredRulesInputSchema = z
       RULE_LIMITS.rosterMax,
       "Minimum Roster size must be at least 1.",
       `Minimum Roster size must be at most ${RULE_LIMITS.rosterMax}.`,
+    ),
+    timedCloseSeconds: timedCloseSecondsSchema.default(
+      DEFAULT_TIMED_CLOSE_SECONDS,
     ),
   })
   .refine((value) => value.rosterMin <= value.rosterMax, {

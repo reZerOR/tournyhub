@@ -43,6 +43,7 @@ export async function saveSimpleRulesAction(
     defaultStartingPrice: string;
     rosterMax: string;
     rosterMin: string;
+    timedCloseSeconds: string;
   },
 ): Promise<RulesResult> {
   const session = await getCurrentSession();
@@ -78,6 +79,7 @@ export async function saveTieredRulesAction(
     budget: string;
     rosterMax: string;
     rosterMin: string;
+    timedCloseSeconds: string;
   },
 ): Promise<RulesResult> {
   const session = await getCurrentSession();

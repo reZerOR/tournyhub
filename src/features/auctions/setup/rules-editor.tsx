@@ -25,10 +25,12 @@ function text(value: null | number): string {
 
 export function RulesEditor({
   auctionId,
+  closeMode,
   ruleSet,
   rulesMode,
 }: {
   auctionId: string;
+  closeMode: "manual" | "timed";
   ruleSet: SerializedRuleSet;
   rulesMode: "simple" | "tiered";
 }) {
@@ -38,6 +40,9 @@ export function RulesEditor({
   const [rosterMax, setRosterMax] = useState(text(ruleSet.rosterMax));
   const [defaultStartingPrice, setDefaultStartingPrice] = useState(
     text(ruleSet.defaultStartingPrice),
+  );
+  const [timedCloseSeconds, setTimedCloseSeconds] = useState(
+    text(ruleSet.timedCloseSeconds),
   );
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<null | string>(null);
@@ -54,6 +59,7 @@ export function RulesEditor({
             budget,
             rosterMax,
             rosterMin,
+            timedCloseSeconds,
           })
         : await saveSimpleRulesAction(auctionId, {
             bidIncrement,
@@ -61,6 +67,7 @@ export function RulesEditor({
             defaultStartingPrice,
             rosterMax,
             rosterMin,
+            timedCloseSeconds,
           });
     setPending(false);
     if (result.status === "saved") {
@@ -69,6 +76,7 @@ export function RulesEditor({
       setRosterMin(text(result.ruleSet.rosterMin));
       setRosterMax(text(result.ruleSet.rosterMax));
       setDefaultStartingPrice(text(result.ruleSet.defaultStartingPrice));
+      setTimedCloseSeconds(text(result.ruleSet.timedCloseSeconds));
       setHasSaved(true);
     } else {
       setHasSaved(false);
@@ -143,6 +151,19 @@ export function RulesEditor({
                     setDefaultStartingPrice(event.target.value)
                   }
                   value={defaultStartingPrice}
+                />
+              </Field>
+            )}
+            {closeMode === "timed" && (
+              <Field className="max-w-48">
+                <FieldLabel htmlFor="rules-timed-close">
+                  Timed Close (seconds)
+                </FieldLabel>
+                <Input
+                  id="rules-timed-close"
+                  inputMode="numeric"
+                  onChange={(event) => setTimedCloseSeconds(event.target.value)}
+                  value={timedCloseSeconds}
                 />
               </Field>
             )}

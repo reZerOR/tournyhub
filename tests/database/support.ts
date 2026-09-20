@@ -78,11 +78,12 @@ export async function setAuctionStatus(
 
 /**
  * The beta permits exactly one Live Auction across the service. Browser tests
- * and earlier database runs can leave one behind, so the Live suites reset it
- * before and after each test to start from a clean service.
+ * and earlier database runs can leave one behind, so the Live suites reset the
+ * running states before and after each test to start from a clean service.
  */
 export async function resetLiveAuctions(): Promise<void> {
   await pool.query(
-    `update "auction" set "status" = 'draft' where "status" = 'live'`,
+    `update "auction" set "status" = 'draft'
+      where "status" in ('live', 'paused')`,
   );
 }

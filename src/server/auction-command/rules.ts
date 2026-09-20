@@ -56,14 +56,15 @@ export async function saveSimpleRules(
     const saved = await client.query<RuleSetRow>(
       `insert into "auction_rule_set"
           ("auction_id", "roster_min", "roster_max", "budget", "bid_increment",
-           "default_starting_price")
-       values ($1, $2, $3, $4, $5, $6)
+           "default_starting_price", "timed_close_seconds")
+       values ($1, $2, $3, $4, $5, $6, $7)
        on conflict ("auction_id") do update
          set "roster_min" = excluded."roster_min",
              "roster_max" = excluded."roster_max",
              "budget" = excluded."budget",
              "bid_increment" = excluded."bid_increment",
              "default_starting_price" = excluded."default_starting_price",
+             "timed_close_seconds" = excluded."timed_close_seconds",
              "updated_at" = now()
        returning *`,
       [
@@ -73,6 +74,7 @@ export async function saveSimpleRules(
         parsed.budget,
         parsed.bidIncrement,
         parsed.defaultStartingPrice,
+        parsed.timedCloseSeconds,
       ],
     );
     await markAuctionDraft(client, auctionId);
@@ -121,14 +123,15 @@ export async function saveTieredRules(
     const saved = await client.query<RuleSetRow>(
       `insert into "auction_rule_set"
           ("auction_id", "roster_min", "roster_max", "budget", "bid_increment",
-           "default_starting_price")
-       values ($1, $2, $3, $4, $5, null)
+           "default_starting_price", "timed_close_seconds")
+       values ($1, $2, $3, $4, $5, null, $6)
        on conflict ("auction_id") do update
          set "roster_min" = excluded."roster_min",
              "roster_max" = excluded."roster_max",
              "budget" = excluded."budget",
              "bid_increment" = excluded."bid_increment",
              "default_starting_price" = null,
+             "timed_close_seconds" = excluded."timed_close_seconds",
              "updated_at" = now()
        returning *`,
       [
@@ -137,6 +140,7 @@ export async function saveTieredRules(
         parsed.rosterMax,
         parsed.budget,
         parsed.bidIncrement,
+        parsed.timedCloseSeconds,
       ],
     );
     await markAuctionDraft(client, auctionId);

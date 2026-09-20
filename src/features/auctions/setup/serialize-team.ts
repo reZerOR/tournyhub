@@ -55,6 +55,7 @@ export interface SerializedRuleSet {
   defaultStartingPrice: null | number;
   rosterMax: null | number;
   rosterMin: null | number;
+  timedCloseSeconds: number;
 }
 
 export function serializeRuleSet(ruleSet: AuctionRuleSet): SerializedRuleSet {
@@ -64,6 +65,7 @@ export function serializeRuleSet(ruleSet: AuctionRuleSet): SerializedRuleSet {
     defaultStartingPrice: ruleSet.defaultStartingPrice,
     rosterMax: ruleSet.rosterMax,
     rosterMin: ruleSet.rosterMin,
+    timedCloseSeconds: ruleSet.timedCloseSeconds,
   };
 }
 
