@@ -67,7 +67,6 @@ export function LiveConsole({
   const [correctionReason, setCorrectionReason] = useState("");
   const [saleIdToReverse, setSaleIdToReverse] = useState("");
   const [pending, setPending] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [finished, setFinished] = useState(false);
   const [message, setMessage] = useState<null | string>(null);
   const [notice, setNotice] = useState<null | string>(null);
@@ -79,6 +78,10 @@ export function LiveConsole({
     () => Date.now() - Date.parse(initialSnapshot.serverTime),
   );
   const finalizingFor = useRef<null | string>(null);
+  // A refresh in flight is bookkeeping, not state: a routine poll must never
+  // change what the console shows or disable a control, or the console would
+  // visibly flicker every two seconds.
+  const refreshing = useRef(false);
 
   const accept = useCallback((next: LiveSnapshot) => {
     setSnapshot(next);
@@ -87,7 +90,8 @@ export function LiveConsole({
   }, []);
 
   const refresh = useCallback(async () => {
-    setSyncing(true);
+    if (refreshing.current) return;
+    refreshing.current = true;
     try {
       const next = await loadSnapshotAction(auctionId);
       // A reconnect, a tab wake, or a skipped revision all replace the whole
@@ -97,7 +101,7 @@ export function LiveConsole({
       // The connection dropped mid-request. The next poll retries, and the
       // controls stay disabled until a fresh snapshot arrives.
     } finally {
-      setSyncing(false);
+      refreshing.current = false;
     }
   }, [accept, auctionId]);
 
@@ -119,10 +123,20 @@ export function LiveConsole({
     };
   }, [refresh]);
 
+  // A running countdown needs a smooth clock. With no deadline to show, the
+  // clock is only used to notice staleness, so a slow tick is enough and the
+  // console stops re-rendering four times a second for no reason.
+  const countingDown =
+    !!snapshot.activePlayer &&
+    (!!snapshot.activePlayer.warningDeadline ||
+      !!snapshot.activePlayer.closeDeadline);
   useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 250);
+    const tick = setInterval(
+      () => setNow(Date.now()),
+      countingDown ? 250 : POLL_INTERVAL_MS,
+    );
     return () => clearInterval(tick);
-  }, []);
+  }, [countingDown]);
 
   useEffect(() => {
     if (role !== "organizer") return;
@@ -205,9 +219,10 @@ export function LiveConsole({
   const nextBid = snapshot.nextBidAmount;
   // The console polls every two seconds. Three missed intervals means the
   // snapshot may be stale, so bidding is disabled until a fresh one arrives.
+  // A routine poll in flight is not staleness and must not disable anything.
   const connectionStale = now - lastSyncedAt > POLL_INTERVAL_MS * 3;
   const controlsReady =
-    snapshot.lifecycle === "live" && !connectionStale && !syncing && !pending;
+    snapshot.lifecycle === "live" && !connectionStale && !pending;
   const canBid =
     role === "representative" &&
     controlsReady &&
@@ -273,11 +288,7 @@ export function LiveConsole({
               <span
                 className={connectionStale ? "text-destructive" : undefined}
               >
-                {connectionStale
-                  ? "Reconnecting…"
-                  : syncing
-                    ? "Refreshing…"
-                    : "Live"}
+                {connectionStale ? "Reconnecting…" : "Live"}
               </span>
             </span>
             <span>
@@ -369,7 +380,7 @@ export function LiveConsole({
               </Button>
             ) : (
               <p className="text-sm text-muted-foreground">
-                {connectionStale || syncing
+                {connectionStale
                   ? "Reconnecting before bidding is available…"
                   : snapshot.lifecycle === "paused"
                     ? "Bidding is suspended while the Auction is Paused."

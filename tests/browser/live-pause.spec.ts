@@ -63,6 +63,50 @@ test("pauses and resumes a Live Auction without losing the Active Player", async
   }
 });
 
+test("keeps the Representative's controls steady across routine polls", async ({
+  browser,
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const setup = await setupLiveAuction(browser, page, {
+    title: "Steady Console Auction",
+  });
+
+  try {
+    await offerRandomPlayer(page);
+    const bidButton = setup.redsRepPage.getByRole("button", {
+      name: /^Bid \d+$/,
+    });
+    await expect(bidButton).toBeVisible({ timeout: 20_000 });
+
+    // Sample across several polling cycles. A background refresh must not
+    // change what the console shows or take the Bid control away: an
+    // Organizer or Representative has to be able to act at any moment.
+    const samples: { bidVisible: boolean; reconnecting: number }[] = [];
+    for (let index = 0; index < 14; index += 1) {
+      samples.push({
+        bidVisible: await bidButton.isVisible(),
+        reconnecting: await setup.redsRepPage
+          .getByText("Reconnecting before bidding is available…")
+          .count(),
+      });
+      await setup.redsRepPage.waitForTimeout(500);
+    }
+
+    expect(samples.filter((sample) => !sample.bidVisible)).toHaveLength(0);
+    expect(samples.filter((sample) => sample.reconnecting > 0)).toHaveLength(0);
+    // The Bid control still works after all that polling.
+    await bidButton.click();
+    await expect(
+      setup.redsRepPage.getByText("Your Team leads this Player."),
+    ).toBeVisible({
+      timeout: 20_000,
+    });
+  } finally {
+    await setup.dispose();
+  }
+});
+
 test("shows connection health, disables controls offline, and replaces state on reconnect", async ({
   browser,
   page,
