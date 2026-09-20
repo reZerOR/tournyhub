@@ -1,6 +1,6 @@
 # TournyHub
 
-TournyHub is a private, non-commercial beta for live player Auctions. This repository contains the application foundation plus email one-time-code authentication and a protected application shell. Auction behavior belongs to later dependency-gated tickets.
+TournyHub is a private, non-commercial beta for live player Auctions. This repository contains the application foundation, passwordless email and Google authentication, User preferences, session controls, and a protected application shell. Auction behavior belongs to later dependency-gated tickets.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ Install the pinned dependencies from a clean checkout:
 pnpm install --frozen-lockfile
 ```
 
-Copy `.env.example` to `.env.local`, then replace provider placeholders when the matching provider-backed features are implemented. Validate the file and start Next.js:
+Copy `.env.example` to `.env.local`, then replace the local placeholders. Validate the file and start Next.js:
 
 ```bash
 pnpm env:check
@@ -41,6 +41,8 @@ The startup validator requires these variables:
 Validation reports variable names and corrective steps without printing configured values. The checked-in example contains local placeholders, not production credentials.
 
 `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASSWORD` are optional. Without them, sign-in emails are written to the gitignored `.dev-emails/` directory instead of being sent, which is sufficient for local development.
+
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are optional as a pair for email-only local development. Set both to enable Google sign-in, and register `<NEXT_PUBLIC_APP_URL>/api/auth/callback/google` as an authorized redirect URI in Google Cloud.
 
 ## Local database
 
@@ -85,16 +87,16 @@ Continuous integration performs the same sequence from a clean environment.
 
 The initial directories reserve the module ownership defined in `docs/architecture.md`:
 
-| Path                           | Module                                               |
-| ------------------------------ | ---------------------------------------------------- |
-| `src/server/auth/`             | Better Auth configuration, sessions, OTP rate limits |
-| `src/features/identity/`       | Identity user interface and invitations              |
-| `src/features/auctions/setup/` | Auction Setup and Draft workflow                     |
-| `src/server/auction-command/`  | Authoritative fairness-affecting commands            |
-| `src/server/auction-query/`    | Authorized snapshots and read models                 |
-| `src/server/realtime/`         | Committed revision distribution and private access   |
-| `src/server/import-export/`    | Player imports and Auction Results exports           |
-| `src/features/administration/` | Platform Administration interface                    |
-| `src/domain/`                  | Shared domain types without framework code           |
+| Path                           | Module                                              |
+| ------------------------------ | --------------------------------------------------- |
+| `src/server/auth/`             | Better Auth, sessions, account security, OTP limits |
+| `src/features/identity/`       | Sign-in, User settings, sessions, and invitations   |
+| `src/features/auctions/setup/` | Auction Setup and Draft workflow                    |
+| `src/server/auction-command/`  | Authoritative fairness-affecting commands           |
+| `src/server/auction-query/`    | Authorized snapshots and read models                |
+| `src/server/realtime/`         | Committed revision distribution and private access  |
+| `src/server/import-export/`    | Player imports and Auction Results exports          |
+| `src/features/administration/` | Platform Administration interface                   |
+| `src/domain/`                  | Shared domain types without framework code          |
 
 The Auction Command module remains the primary domain and testing seam for the Auction behavior implemented in later tickets.

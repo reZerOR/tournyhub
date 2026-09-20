@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { authClient } from "@/features/identity/auth-client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,8 +11,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
+import { authClient } from "@/features/identity/auth-client";
 import { OTP_RESEND_COOLDOWN_SECONDS } from "@/server/auth/otp-request-log";
 
 type Step = "email" | "otp";
@@ -39,7 +47,27 @@ function friendlyErrorMessage(error: {
   }
 }
 
-export function SignInForm() {
+function oauthErrorMessage(error?: string): string | null {
+  if (!error) return null;
+
+  switch (error.toLowerCase()) {
+    case "email_not_verified":
+      return "Google did not verify that email address.";
+    case "account_not_linked":
+    case "email_does_not_match":
+      return "That Google identity cannot be linked to this User.";
+    default:
+      return "Google sign-in could not be completed. Try again.";
+  }
+}
+
+export function SignInForm({
+  googleEnabled,
+  oauthError,
+}: {
+  googleEnabled: boolean;
+  oauthError?: string;
+}) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
@@ -51,23 +79,17 @@ export function SignInForm() {
 
   useEffect(() => {
     return () => {
-      if (cooldownInterval.current) {
-        clearInterval(cooldownInterval.current);
-      }
+      if (cooldownInterval.current) clearInterval(cooldownInterval.current);
     };
   }, []);
 
   function startCooldown() {
     setCooldownSeconds(OTP_RESEND_COOLDOWN_SECONDS);
-    if (cooldownInterval.current) {
-      clearInterval(cooldownInterval.current);
-    }
+    if (cooldownInterval.current) clearInterval(cooldownInterval.current);
     cooldownInterval.current = setInterval(() => {
       setCooldownSeconds((remaining) => {
         if (remaining <= 1) {
-          if (cooldownInterval.current) {
-            clearInterval(cooldownInterval.current);
-          }
+          if (cooldownInterval.current) clearInterval(cooldownInterval.current);
           return 0;
         }
         return remaining - 1;
@@ -117,37 +139,79 @@ export function SignInForm() {
     router.refresh();
   }
 
+  async function handleGoogleSignIn() {
+    setError(null);
+    setIsSubmitting(true);
+    const { error: googleError } = await authClient.signIn.social({
+      callbackURL: "/app",
+      errorCallbackURL: "/sign-in",
+      provider: "google",
+    });
+
+    if (googleError) {
+      setError(
+        oauthErrorMessage(googleError.code) ??
+          googleError.message ??
+          "Google sign-in could not be completed.",
+      );
+      setIsSubmitting(false);
+    }
+  }
+
   if (step === "email") {
+    const callbackError = oauthErrorMessage(oauthError);
+
     return (
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Sign in</CardTitle>
+          <CardTitle aria-level={1} role="heading">
+            Sign in
+          </CardTitle>
           <CardDescription>
             We&apos;ll email you a one-time code. No password needed.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="flex flex-col gap-4" onSubmit={handleEmailSubmit}>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                autoComplete="email"
-                required
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </div>
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <Button disabled={isSubmitting} type="submit">
-              {isSubmitting ? "Sending…" : "Send code"}
-            </Button>
-          </form>
+          <FieldGroup>
+            <form onSubmit={handleEmailSubmit}>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="email">Email</FieldLabel>
+                  <Input
+                    id="email"
+                    autoComplete="email"
+                    required
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
+                </Field>
+                {(error || callbackError) && (
+                  <FieldError>{error ?? callbackError}</FieldError>
+                )}
+                <Button disabled={isSubmitting} type="submit">
+                  {isSubmitting && <Spinner data-icon="inline-start" />}
+                  Send code
+                </Button>
+              </FieldGroup>
+            </form>
+            <FieldSeparator>or</FieldSeparator>
+            <Field>
+              <Button
+                disabled={!googleEnabled || isSubmitting}
+                onClick={handleGoogleSignIn}
+                type="button"
+                variant="outline"
+              >
+                Continue with Google
+              </Button>
+              {!googleEnabled && (
+                <FieldDescription>
+                  Google sign-in is not configured in this environment.
+                </FieldDescription>
+              )}
+            </Field>
+          </FieldGroup>
         </CardContent>
       </Card>
     );
@@ -156,45 +220,46 @@ export function SignInForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
-        <CardTitle>Enter your code</CardTitle>
+        <CardTitle aria-level={1} role="heading">
+          Enter your code
+        </CardTitle>
         <CardDescription>
           We sent a 6-digit code to {email}. It expires in 10 minutes.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="flex flex-col gap-4" onSubmit={handleOtpSubmit}>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="otp">Code</Label>
-            <Input
-              id="otp"
-              autoComplete="one-time-code"
-              inputMode="numeric"
-              maxLength={6}
-              required
-              value={otp}
-              onChange={(event) =>
-                setOtp(event.target.value.replace(/\D/g, ""))
-              }
-            />
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <Button disabled={isSubmitting} type="submit">
-            {isSubmitting ? "Verifying…" : "Verify and sign in"}
-          </Button>
-          <Button
-            disabled={cooldownSeconds > 0 || isSubmitting}
-            onClick={requestCode}
-            type="button"
-            variant="ghost"
-          >
-            {cooldownSeconds > 0
-              ? `Resend code in ${cooldownSeconds}s`
-              : "Resend code"}
-          </Button>
+        <form onSubmit={handleOtpSubmit}>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="otp">Code</FieldLabel>
+              <Input
+                id="otp"
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                maxLength={6}
+                required
+                value={otp}
+                onChange={(event) =>
+                  setOtp(event.target.value.replace(/\D/g, ""))
+                }
+              />
+            </Field>
+            {error && <FieldError>{error}</FieldError>}
+            <Button disabled={isSubmitting} type="submit">
+              {isSubmitting && <Spinner data-icon="inline-start" />}
+              Verify and sign in
+            </Button>
+            <Button
+              disabled={cooldownSeconds > 0 || isSubmitting}
+              onClick={requestCode}
+              type="button"
+              variant="ghost"
+            >
+              {cooldownSeconds > 0
+                ? `Resend code in ${cooldownSeconds}s`
+                : "Resend code"}
+            </Button>
+          </FieldGroup>
         </form>
       </CardContent>
     </Card>

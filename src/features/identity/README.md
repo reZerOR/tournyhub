@@ -1,10 +1,12 @@
 # Identity
 
-This module owns account user interfaces and Auction Invitations.
+This module owns sign-in, account settings, active-session controls, and
+Auction Invitations.
 
-Ticket 02 adds email one-time-code sign-in (`sign-in-form.tsx`), sign-out
-(`sign-out-button.tsx`), and the browser `authClient` used by both. Better
-Auth configuration, session helpers, and OTP rate limiting live in
-`src/server/auth/` since they are framework wiring rather than UI.
+`sign-in-form.tsx` supports email one-time codes and Google.
+`account-settings.tsx` manages the User's display name, appearance, sounds,
+Google link, recent-auth confirmation, and active sessions. Better Auth
+configuration, session helpers, and OTP rate limiting live in
+`src/server/auth/`.
 
-Google sign-in, account settings, and invitations belong to later tickets.
+Auction Invitations belong to a later ticket.

@@ -15,13 +15,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(SIGN_IN_PATH, request.url));
   }
 
-  if (pathname === SIGN_IN_PATH && hasSessionCookie) {
-    return NextResponse.redirect(new URL(PROTECTED_PREFIX, request.url));
-  }
-
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/sign-in"],
+  matcher: ["/app/:path*"],
 };

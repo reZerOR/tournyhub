@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
+
+import { getCurrentSession } from "@/server/auth/session";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,13 +20,17 @@ export const metadata: Metadata = {
   description: "Private live player Auctions for Organizers and Teams.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
+  const session = await getCurrentSession();
+  const appearance = session?.user.appearance ?? "light";
+
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${appearance === "dark" ? "dark" : ""} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">{children}</body>
     </html>

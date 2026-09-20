@@ -51,6 +51,20 @@ describe("environment validation", () => {
     expect(errorMessage).toContain("BETTER_AUTH_SECRET");
   });
 
+  it("requires Google credentials as a pair", () => {
+    const missingSecret = captureEnvironmentError({
+      GOOGLE_CLIENT_ID: "google-client-id",
+    });
+    expect(missingSecret).toContain("GOOGLE_CLIENT_SECRET");
+
+    const configured = parseEnvironment({
+      ...validEnvironment,
+      GOOGLE_CLIENT_ID: "google-client-id",
+      GOOGLE_CLIENT_SECRET: "google-client-secret",
+    });
+    expect(configured.GOOGLE_CLIENT_ID).toBe("google-client-id");
+  });
+
   it("does not expose a malformed database URL", () => {
     const privateValue = "do-not-print-this-password";
     const errorMessage = captureEnvironmentError({

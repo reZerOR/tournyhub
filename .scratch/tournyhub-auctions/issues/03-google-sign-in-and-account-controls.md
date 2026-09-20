@@ -4,7 +4,7 @@
 
 **Blocked by:** 02, Add email OTP authentication and a protected shell.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] A new User can register through Google and a returning User can sign in through Google.
 - [ ] Google links automatically only when it supplies the same verified email as the existing User, without creating a duplicate identity.
