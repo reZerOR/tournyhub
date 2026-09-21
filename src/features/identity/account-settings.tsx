@@ -26,13 +26,9 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { authClient } from "@/features/identity/auth-client";
 
-type Appearance = "light" | "dark";
-
 interface UserPreferences {
-  appearance: Appearance;
   email: string;
   name: string;
   soundEnabled: boolean;
@@ -87,9 +83,6 @@ export function AccountSettings({
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialUser.name);
-  const [appearance, setAppearance] = useState<Appearance>(
-    initialUser.appearance,
-  );
   const [soundEnabled, setSoundEnabled] = useState(initialUser.soundEnabled);
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
@@ -144,7 +137,6 @@ export function AccountSettings({
 
     setPendingAction("preferences");
     const { error: updateError } = await authClient.updateUser({
-      appearance,
       name: displayName,
       soundEnabled,
     });
@@ -156,7 +148,6 @@ export function AccountSettings({
     }
 
     setName(displayName);
-    document.documentElement.classList.toggle("dark", appearance === "dark");
     setStatus("Preferences saved.");
     router.refresh();
   }
@@ -380,26 +371,6 @@ export function AccountSettings({
                   value={name}
                 />
                 {!name.trim() && <FieldError>Enter a display name.</FieldError>}
-              </Field>
-              <Field>
-                <FieldLabel>Appearance</FieldLabel>
-                <ToggleGroup
-                  aria-label="Appearance"
-                  onValueChange={(value) => {
-                    const nextAppearance = value[0];
-                    if (
-                      nextAppearance === "light" ||
-                      nextAppearance === "dark"
-                    ) {
-                      setAppearance(nextAppearance);
-                    }
-                  }}
-                  value={[appearance]}
-                  variant="outline"
-                >
-                  <ToggleGroupItem value="light">Light</ToggleGroupItem>
-                  <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
-                </ToggleGroup>
               </Field>
               <Field orientation="horizontal">
                 <FieldContent>

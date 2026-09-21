@@ -7,7 +7,7 @@ made so that Organizers running a Draft, Team Reps bidding in a Live Auction,
 and Team Captains reviewing Final Results feel like they are standing on
 the same lit stage — not reading a spreadsheet.
 
-The reference image is `public/background.png`. The default dark canvas is
+The reference image is `public/background.png`. The permanent dark canvas is
 the arena; the royal blue and electric cyan accents are the stage lights;
 the slanted panels, neon-rimmed badges, and trophy centerpiece are the
 visual vocabulary every surface borrows from.
@@ -44,7 +44,7 @@ OKLCH values.
 
 | Role        | Token                 | Purpose                                               |
 | ----------- | --------------------- | ----------------------------------------------------- |
-| Canvas      | `--background`        | The arena floor. Dark in dark mode, studio in light.  |
+| Canvas      | `--background`        | The permanent deep-navy arena floor.                  |
 | Foreground  | `--foreground`        | Type and icon strokes.                                |
 | Brand       | `--primary`           | Royal blue. Used for primary actions and brand marks. |
 | Stage light | `--neon`              | Electric cyan. Hot accents, live state, glows.        |
@@ -57,24 +57,11 @@ OKLCH values.
 
 ### 1.4 Color tokens
 
-All colors are defined in `src/app/globals.css` as OKLCH so equal lightness
-steps look equal across modes. Never hardcode hex; always reference the
-token via Tailwind utilities (`bg-neon`, `text-bid`, etc.).
+All colors are defined in `src/app/globals.css` as one permanent OKLCH dark
+palette. Never hardcode hex; always reference a token through Tailwind
+utilities (`bg-neon`, `text-bid`, etc.).
 
-#### Light mode (studio backdrop)
-
-| Token           | OKLCH                    | Use                |
-| --------------- | ------------------------ | ------------------ |
-| `--background`  | `oklch(0.985 0.005 240)` | Studio canvas      |
-| `--foreground`  | `oklch(0.18 0.04 260)`   | Body type          |
-| `--primary`     | `oklch(0.42 0.18 264)`   | Royal blue brand   |
-| `--neon`        | `oklch(0.7 0.2 235)`     | Stage-light cyan   |
-| `--bid`         | `oklch(0.65 0.22 295)`   | Magenta-violet     |
-| `--roster`      | `oklch(0.7 0.18 175)`    | Teal roster health |
-| `--warning`     | `oklch(0.78 0.18 75)`    | Amber              |
-| `--destructive` | `oklch(0.55 0.22 27)`    | Coral red          |
-
-#### Dark mode (the house style)
+#### Permanent dark palette
 
 | Token           | OKLCH                   | Use                         |
 | --------------- | ----------------------- | --------------------------- |
@@ -88,9 +75,10 @@ token via Tailwind utilities (`bg-neon`, `text-bid`, etc.).
 | `--destructive` | `oklch(0.7 0.22 22)`    | Coral red                   |
 | `--spotlight`   | `oklch(0.05 0.02 260)`  | Stage backdrop              |
 
-Both modes are valid. Dark is the **default** for Organizers and Team Reps;
-light is for design review and daylight settings. Mode is set per User in
-account preferences and propagated via the `.dark` class on `<html>`.
+TournyHub renders only this dark palette. `<html>` always carries `.dark` so
+Tailwind dark variants remain compatible, while `:root` holds the same dark
+tokens as a fallback. There is no appearance toggle or User-specific light
+mode. Public authentication and authenticated pages share the arena canvas.
 
 ### 1.5 Typography
 
@@ -100,8 +88,8 @@ account preferences and propagated via the `.dark` class on `<html>`.
 | Sans    | `--font-sans`    | Geist Sans | Body, buttons, controls               |
 | Mono    | `--font-mono`    | Geist Mono | Bid amounts, Credit display, IDs      |
 
-Display inherits `--font-sans` in dark mode for tighter tracking, and
-shifts to `--font-display` (Geist with display tracking) when set. Body
+Display inherits `--font-sans` for tighter tracking, and shifts to
+`--font-display` (Geist with display tracking) when set. Body
 text uses 16px, line-height 1.6, measure 64–72ch.
 
 #### Hierarchy (Rule of 3)
@@ -155,7 +143,7 @@ from primitives — never custom divs dressed up to look like a primitive.
 ### 2.1 shadcn primitives installed
 
 `alert`, `avatar`, `badge`, `button`, `card`, `dialog`, `field`, `input`,
-`input-otp`, `label`, `select`, `separator`, `sheet`, `sonner`, `spinner`,
+`empty`, `input-otp`, `label`, `select`, `separator`, `sheet`, `sonner`, `spinner`,
 `switch`, `table`, `tabs`, `toggle`, `toggle-group`, `tooltip`.
 
 Components are `base` style (Base UI primitives, not Radix). Style:
@@ -284,10 +272,20 @@ variant="neon" size="xl">` CTA to sign in.
 Same arena tone, smaller canvas. `<Trophy size={72}>` in the form header.
 Form uses `<Field>` + `<InputGroup>` for the OTP code.
 
-### 3.3 Auctions list (`/auctions`)
+### 3.3 Dashboard (`/app`)
 
-`<AuctionStatusCard>` grid. Each card carries Game + title + state rail.
-The Live card has a pulsing neon rail and a `<LiveBadge>`.
+The authenticated shell uses the same `public/background.png` canvas and dark
+scrim as the sign-in page. The sidebar, header, footer, and content cards sit
+on translucent glass surfaces so the workspace feels like one continuous
+arena. Navigation stays visible on desktop and moves into a `<Sheet>` on
+smaller screens.
+
+The Dashboard opens with a compact arena hero and then uses full-composition
+`<Card>` sections for organized Auctions, represented Teams, invitations, and
+Archived Auctions. Populated sections use `<Table>` with status badges and
+tabular dates. Empty sections use the shadcn `<Empty>` composition. The layout
+must render real query results and must not use sample rows from the reference
+mockup.
 
 ### 3.4 Live Auction (`/auctions/[id]/live`)
 
@@ -315,8 +313,8 @@ Fields use `<FieldSet>`.
 
 ### 3.7 Account / Admin
 
-Dense tables (`<Table>`) inside `<AuctionPanel tone="glass">`. Side
-navigation via shadcn `<Sidebar>` with brand color primary.
+Dense tables (`<Table>`) inside `<AuctionPanel tone="glass">`. These routes
+share the authenticated arena sidebar and account header with the Dashboard.
 
 ---
 
@@ -439,29 +437,32 @@ that would betray AI generic UI:
 
 ## 10. Files
 
-| Path                                           | Purpose                                                  |
-| ---------------------------------------------- | -------------------------------------------------------- |
-| `src/app/globals.css`                          | Color tokens, arena utilities, focus/motion rules.       |
-| `src/app/layout.tsx`                           | Root layout: appearance class, TooltipProvider, Toaster. |
-| `src/components/ui/button.tsx`                 | Button + neon/bid/trophy variants.                       |
-| `src/components/ui/badge.tsx`                  | Badge + neon/bid/roster/warning/success variants.        |
-| `src/components/ui/alert.tsx`                  | Alert + neon/live/warning/success variants.              |
-| `src/components/ui/sonner.tsx`                 | Arena-styled toasts, dark/light aware.                   |
-| `src/components/ui/*`                          | Other shadcn primitives (Dialog, Sheet, Table, Tabs…).   |
-| `src/components/arena/index.ts`                | Public barrel for TournyHub composites.                  |
-| `src/components/arena/auction-panel.tsx`       | The base glassy/neon panel wrapper.                      |
-| `src/components/arena/bid-controls.tsx`        | `<BidConsole>`.                                          |
-| `src/components/arena/team-chip.tsx`           | `<TeamChip>`.                                            |
-| `src/components/arena/player-row.tsx`          | `<PlayerRow>`.                                           |
-| `src/components/arena/live-badge.tsx`          | `<LiveBadge>`.                                           |
-| `src/components/arena/trophy.tsx`              | `<Trophy>` SVG.                                          |
-| `src/components/arena/arena-banner.tsx`        | `<ArenaBanner>` pennant.                                 |
-| `src/components/arena/credit-display.tsx`      | `<CreditDisplay>`.                                       |
-| `src/components/arena/live-auction-stage.tsx`  | `<LiveAuctionStage>`.                                    |
-| `src/components/arena/results-trophy.tsx`      | `<ResultsTrophy>`.                                       |
-| `src/components/arena/auction-hero.tsx`        | `<AuctionHero>`.                                         |
-| `src/components/arena/auction-status-card.tsx` | `<AuctionStatusCard>`.                                   |
-| `public/background.png`                        | The arena reference image.                               |
+| Path                                           | Purpose                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------ |
+| `src/app/globals.css`                          | Color tokens, arena utilities, focus/motion rules.           |
+| `src/app/layout.tsx`                           | Root layout: permanent dark class, TooltipProvider, Toaster. |
+| `src/app/app/layout.tsx`                       | Authenticated arena shell and account header.                |
+| `src/app/app/page.tsx`                         | Dashboard hero, Auction tables, and empty states.            |
+| `src/features/navigation/app-navigation.tsx`   | Desktop and mobile authenticated navigation.                 |
+| `src/components/ui/button.tsx`                 | Button + neon/bid/trophy variants.                           |
+| `src/components/ui/badge.tsx`                  | Badge + neon/bid/roster/warning/success variants.            |
+| `src/components/ui/alert.tsx`                  | Alert + neon/live/warning/success variants.                  |
+| `src/components/ui/sonner.tsx`                 | Arena-styled dark toasts.                                    |
+| `src/components/ui/*`                          | Other shadcn primitives (Dialog, Sheet, Table, Tabs…).       |
+| `src/components/arena/index.ts`                | Public barrel for TournyHub composites.                      |
+| `src/components/arena/auction-panel.tsx`       | The base glassy/neon panel wrapper.                          |
+| `src/components/arena/bid-controls.tsx`        | `<BidConsole>`.                                              |
+| `src/components/arena/team-chip.tsx`           | `<TeamChip>`.                                                |
+| `src/components/arena/player-row.tsx`          | `<PlayerRow>`.                                               |
+| `src/components/arena/live-badge.tsx`          | `<LiveBadge>`.                                               |
+| `src/components/arena/trophy.tsx`              | `<Trophy>` SVG.                                              |
+| `src/components/arena/arena-banner.tsx`        | `<ArenaBanner>` pennant.                                     |
+| `src/components/arena/credit-display.tsx`      | `<CreditDisplay>`.                                           |
+| `src/components/arena/live-auction-stage.tsx`  | `<LiveAuctionStage>`.                                        |
+| `src/components/arena/results-trophy.tsx`      | `<ResultsTrophy>`.                                           |
+| `src/components/arena/auction-hero.tsx`        | `<AuctionHero>`.                                             |
+| `src/components/arena/auction-status-card.tsx` | `<AuctionStatusCard>`.                                       |
+| `public/background.png`                        | The arena reference image.                                   |
 
 When adding a new surface:
 

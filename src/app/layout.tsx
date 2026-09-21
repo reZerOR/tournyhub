@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getCurrentSession } from "@/server/auth/session";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -22,16 +21,13 @@ export const metadata: Metadata = {
   description: "Private live player Auctions for Organizers and Teams.",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
-  const session = await getCurrentSession();
-  const appearance = session?.user.appearance ?? "light";
-
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${appearance === "dark" ? "dark" : ""} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">

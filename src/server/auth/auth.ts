@@ -91,7 +91,7 @@ export function buildAuthOptions({
     user: {
       additionalFields: {
         appearance: {
-          defaultValue: "light",
+          defaultValue: "dark",
           required: true,
           type: ["light", "dark"],
         },

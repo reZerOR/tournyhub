@@ -35,11 +35,11 @@ async function signIn(page: Page, email: string): Promise<void> {
 
 test("a User can update persistent account preferences", async ({ page }) => {
   await signIn(page, uniqueEmail("preferences"));
-  await page.getByRole("link", { name: "Account" }).click();
+  await page.getByRole("link", { exact: true, name: "Account" }).click();
   await expect(page).toHaveURL(/\/app\/account$/);
+  await expect(page.locator("html")).toHaveClass(/dark/);
 
   await page.getByLabel("Display name").fill("Tournament Director");
-  await page.getByRole("button", { name: "Dark" }).click();
   await page.getByRole("switch", { name: "Live sounds" }).click();
   await page.getByRole("button", { name: "Save preferences" }).click();
 
@@ -49,10 +49,7 @@ test("a User can update persistent account preferences", async ({ page }) => {
   await expect(page.getByLabel("Display name")).toHaveValue(
     "Tournament Director",
   );
-  await expect(page.getByRole("button", { name: "Dark" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(page.locator("html")).toHaveClass(/dark/);
   await expect(page.getByRole("switch", { name: "Live sounds" })).toBeChecked();
 });
 

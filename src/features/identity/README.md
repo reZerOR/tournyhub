@@ -4,7 +4,7 @@ This module owns sign-in, account settings, active-session controls, and
 Auction Invitations.
 
 `sign-in-form.tsx` supports email one-time codes and Google.
-`account-settings.tsx` manages the User's display name, appearance, sounds,
+`account-settings.tsx` manages the User's display name, sounds,
 Google link, recent-auth confirmation, and active sessions. Better Auth
 configuration, session helpers, and OTP rate limiting live in
 `src/server/auth/`.

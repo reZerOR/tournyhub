@@ -11,37 +11,14 @@ import {
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 import { cn } from "cn";
 
-type Appearance = "light" | "dark";
-
 /*
-  TournyHub wraps Sonner without next-themes — appearance is read from
-  the `dark` class on <html>, which is set by the user-selected
-  preference in RootLayout. Toast surface uses the same arena palette
-  as AuctionPanel so feedback matches the rest of the interface.
+  TournyHub uses one permanent dark theme. Toast surfaces use the same arena
+  palette as AuctionPanel so feedback matches the rest of the interface.
 */
-function useResolvedAppearance(): Appearance {
-  const [appearance, setAppearance] = React.useState<Appearance>("dark");
-
-  React.useEffect(() => {
-    const root = document.documentElement;
-    const update = () => {
-      setAppearance(root.classList.contains("dark") ? "dark" : "light");
-    };
-    update();
-    const observer = new MutationObserver(update);
-    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
-    return () => observer.disconnect();
-  }, []);
-
-  return appearance;
-}
-
 const Toaster = ({ ...props }: ToasterProps) => {
-  const appearance = useResolvedAppearance();
-
   return (
     <Sonner
-      theme={appearance}
+      theme="dark"
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,

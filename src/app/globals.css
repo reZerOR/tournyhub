@@ -77,80 +77,15 @@
 }
 
 /*
-  TournyHub — Arena Theme
+  TournyHub — Permanent Arena Theme
 
-  The interface is the field of play. Every surface treats dark canvas as the
-  playing surface, electric neon as the stage lights, and royal blue as the
-  house color. Light mode keeps the same semantic roles but lifts the canvas
-  to a bright studio backdrop so designers and organizers can review rosters
-  without eye fatigue.
+  The interface is the field of play. Every surface treats deep navy as the
+  playing surface, electric cyan as the stage lights, and translucent panels
+  as part of the same visual world as the public sign-in experience.
 */
 
 :root {
-  /* Light mode — studio backdrop with neon accents. */
-  --background: oklch(0.985 0.005 240);
-  --foreground: oklch(0.18 0.04 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.04 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.04 260);
-
-  /* Royal blue — TournyHub's brand voice. */
-  --primary: oklch(0.42 0.18 264);
-  --primary-foreground: oklch(0.98 0.01 240);
-
-  --muted: oklch(0.96 0.01 240);
-  --muted-foreground: oklch(0.5 0.03 255);
-  --secondary: oklch(0.94 0.02 245);
-  --secondary-foreground: oklch(0.22 0.04 260);
-  --accent: oklch(0.94 0.04 250);
-  --accent-foreground: oklch(0.22 0.05 260);
-
-  --destructive: oklch(0.55 0.22 27);
-  --border: oklch(0.9 0.015 245);
-  --input: oklch(0.9 0.015 245);
-  --ring: oklch(0.6 0.16 255);
-
-  --chart-1: oklch(0.6 0.2 255);
-  --chart-2: oklch(0.7 0.18 220);
-  --chart-3: oklch(0.65 0.2 295);
-  --chart-4: oklch(0.7 0.18 175);
-  --chart-5: oklch(0.65 0.22 35);
-
-  --sidebar: oklch(0.98 0.005 240);
-  --sidebar-foreground: oklch(0.22 0.04 260);
-  --sidebar-primary: oklch(0.42 0.18 264);
-  --sidebar-primary-foreground: oklch(0.98 0.01 240);
-  --sidebar-accent: oklch(0.94 0.02 245);
-  --sidebar-accent-foreground: oklch(0.22 0.04 260);
-  --sidebar-border: oklch(0.9 0.015 245);
-  --sidebar-ring: oklch(0.6 0.16 255);
-
-  /* Tournament semantics — visible in both modes. */
-  --arena: oklch(0.96 0.01 240);
-  --arena-foreground: oklch(0.22 0.04 260);
-  --neon: oklch(0.7 0.2 235);
-  --neon-foreground: oklch(0.12 0.05 260);
-  --bid: oklch(0.65 0.22 295);
-  --bid-foreground: oklch(0.98 0.01 240);
-  --roster: oklch(0.7 0.18 175);
-  --roster-foreground: oklch(0.16 0.04 175);
-  --warning: oklch(0.78 0.18 75);
-  --warning-foreground: oklch(0.25 0.05 60);
-  --success: oklch(0.7 0.18 150);
-  --success-foreground: oklch(0.18 0.04 150);
-  --spotlight: oklch(0.18 0.04 260);
-  --spotlight-foreground: oklch(0.98 0.01 240);
-
-  --radius: 0.625rem;
-}
-
-/*
-  Dark mode is the house style. Default appearance for organizers and team reps.
-  Drops the canvas to deep navy, raises the neon to electric cyan, and pulls
-  every UI panel into a glassy arena surface.
-*/
-.dark {
+  color-scheme: dark;
   --background: oklch(0.13 0.025 260);
   --foreground: oklch(0.96 0.01 240);
   --card: oklch(0.18 0.03 260);
@@ -202,6 +137,8 @@
   --success-foreground: oklch(0.18 0.04 150);
   --spotlight: oklch(0.05 0.02 260);
   --spotlight-foreground: oklch(0.98 0.01 240);
+
+  --radius: 0.625rem;
 }
 
 @layer base {
@@ -303,5 +240,46 @@
       color-mix(in oklab, var(--neon) 60%, transparent),
       transparent
     );
+  }
+  /* The authenticated workspace continues the full-page sign-in arena. */
+  .app-shell {
+    background:
+      radial-gradient(
+        circle at 72% 0%,
+        color-mix(in oklab, var(--neon) 10%, transparent),
+        transparent 34rem
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--spotlight) 84%, transparent),
+        color-mix(in oklab, var(--background) 96%, transparent)
+      ),
+      url("/background.png") center top / cover fixed;
+    background-color: var(--background);
+  }
+  /* Navigation is a glass rail over the shared arena canvas. */
+  .app-shell-sidebar {
+    background: color-mix(in oklab, var(--spotlight) 86%, transparent);
+    backdrop-filter: blur(18px);
+  }
+  /* Content cards remain legible while allowing the arena to show through. */
+  .dashboard-panel {
+    background: color-mix(in oklab, var(--card) 84%, transparent);
+    box-shadow: var(--shadow-arena-panel);
+    border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+    backdrop-filter: blur(14px);
+  }
+  /* Dashboard welcome panel uses the same stage image as sign-in and Live Auction. */
+  .dashboard-hero {
+    background-image:
+      linear-gradient(
+        90deg,
+        color-mix(in oklab, var(--spotlight) 96%, transparent) 0%,
+        color-mix(in oklab, var(--spotlight) 82%, transparent) 55%,
+        color-mix(in oklab, var(--spotlight) 55%, transparent) 100%
+      ),
+      url("/background.png");
+    background-position: center 58%;
+    background-size: auto, cover;
   }
 }

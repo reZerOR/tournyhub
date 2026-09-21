@@ -18,7 +18,6 @@ export default async function AccountPage({
         serverEnv.GOOGLE_CLIENT_ID && serverEnv.GOOGLE_CLIENT_SECRET,
       )}
       initialUser={{
-        appearance: session.user.appearance,
         email: session.user.email,
         name: session.user.name,
         soundEnabled: session.user.soundEnabled,
