@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { getCurrentSession } from "@/server/auth/session";
 import "./globals.css";
 
@@ -32,7 +34,10 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${appearance === "dark" ? "dark" : ""} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        <TooltipProvider>{children}</TooltipProvider>
+        <Toaster />
+      </body>
     </html>
   );
 }

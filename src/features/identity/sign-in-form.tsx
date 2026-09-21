@@ -17,12 +17,19 @@ import {
   FieldError,
   FieldGroup,
   FieldLabel,
-  FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/features/identity/auth-client";
 import { OTP_RESEND_COOLDOWN_SECONDS } from "@/server/auth/otp-request-log";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
+import { ArrowLeft, ArrowRight, Clock, Lock, Mail } from "lucide-react";
+import Image from "next/image";
 
 type Step = "email" | "otp";
 
@@ -59,6 +66,29 @@ function oauthErrorMessage(error?: string): string | null {
     default:
       return "Google sign-in could not be completed. Try again.";
   }
+}
+
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4">
+      <path
+        fill="#4285F4"
+        d="M23.5 12.3c0-.9-.1-1.5-.3-2.3H12v4.5h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.1.1 3.5 2.7.2.1c2.2-2 3.8-5 3.8-8.9Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.8-5l-.1.1-3.6 2.8v.1C3.5 21.3 7.5 24 12 24Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.2 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.1-.1-3.6-2.8-.1.1C.5 8.5 0 10.2 0 12s.5 3.5 1.4 5.2l3.8-2.8Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.7c1.8 0 3 .8 3.7 1.4l3.3-3.2C17.9 1.1 15.2 0 12 0 7.5 0 3.5 2.7 1.4 6.8l3.8 2.9c1-2.9 3.7-5 6.8-5Z"
+      />
+    </svg>
+  );
 }
 
 export function SignInForm({
@@ -160,17 +190,30 @@ export function SignInForm({
     }
   }
 
+  function useDifferentEmail() {
+    setError(null);
+    setOtp("");
+    setStep("email");
+  }
+
   if (step === "email") {
     const callbackError = oauthErrorMessage(oauthError);
 
     return (
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle aria-level={1} role="heading">
-            Sign in
+      <Card className="w-full max-w-md border-white/10 bg-card/85 shadow-2xl backdrop-blur-md">
+        <CardHeader className="items-center text-center">
+          <Image
+            src="/tournyhub_icon.svg"
+            alt=""
+            width={48}
+            height={48}
+            className="mx-auto size-12"
+          />
+          <CardTitle aria-level={1} role="heading" className="text-2xl">
+            Sign in to TournyHub
           </CardTitle>
           <CardDescription>
-            We&apos;ll email you a one-time code. No password needed.
+            Use a one-time code or continue with Google.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -178,33 +221,53 @@ export function SignInForm({
             <form onSubmit={handleEmailSubmit}>
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor="email">Email</FieldLabel>
-                  <Input
-                    id="email"
-                    autoComplete="email"
-                    required
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                  />
+                  <FieldLabel htmlFor="email">Email address</FieldLabel>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      autoComplete="email"
+                      required
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
                 </Field>
                 {(error || callbackError) && (
                   <FieldError>{error ?? callbackError}</FieldError>
                 )}
-                <Button disabled={isSubmitting} type="submit">
+                <Button
+                  disabled={isSubmitting}
+                  type="submit"
+                  size="lg"
+                  className="w-full"
+                >
                   {isSubmitting && <Spinner data-icon="inline-start" />}
                   Send code
+                  <ArrowRight data-icon="inline-end" />
                 </Button>
               </FieldGroup>
             </form>
-            <FieldSeparator>or</FieldSeparator>
+            <div
+              data-slot="field-separator"
+              className="relative flex items-center gap-4 text-xs text-white/60 uppercase"
+            >
+              <span aria-hidden className="h-px flex-1 bg-white/15" />
+              Or
+              <span aria-hidden className="h-px flex-1 bg-white/15" />
+            </div>
             <Field>
               <Button
                 disabled={!googleEnabled || isSubmitting}
                 onClick={handleGoogleSignIn}
                 type="button"
                 variant="outline"
+                size="lg"
+                className="w-full"
               >
+                <GoogleMark />
                 Continue with Google
               </Button>
               {!googleEnabled && (
@@ -213,6 +276,12 @@ export function SignInForm({
                 </FieldDescription>
               )}
             </Field>
+            <div className="flex flex-col items-center gap-1 pt-2 text-center">
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                <Lock className="size-4" />
+                Secure passwordless sign-in
+              </p>
+            </div>
           </FieldGroup>
         </CardContent>
       </Card>
@@ -220,10 +289,17 @@ export function SignInForm({
   }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle aria-level={1} role="heading">
-          Enter your code
+    <Card className="w-full max-w-md border-white/10 bg-card/85 shadow-2xl backdrop-blur-md">
+      <CardHeader className="items-center text-center">
+        <Image
+          src="/tournyhub_icon.svg"
+          alt=""
+          width={48}
+          height={48}
+          className="mx-auto size-12"
+        />
+        <CardTitle aria-level={1} role="heading" className="text-2xl">
+          Enter verification code
         </CardTitle>
         <CardDescription>
           We sent a 6-digit code to {email}. It expires in 10 minutes.
@@ -233,34 +309,83 @@ export function SignInForm({
         <form onSubmit={handleOtpSubmit}>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="otp">Code</FieldLabel>
-              <Input
+              <InputOTP
                 id="otp"
-                autoComplete="one-time-code"
-                inputMode="numeric"
+                aria-label="Code"
                 maxLength={6}
+                pattern={REGEXP_ONLY_DIGITS}
                 required
                 value={otp}
-                onChange={(event) =>
-                  setOtp(event.target.value.replace(/\D/g, ""))
-                }
-              />
+                onChange={(value) => setOtp(value.replace(/\D/g, ""))}
+                containerClassName="justify-center"
+              >
+                <InputOTPGroup className="gap-2">
+                  <InputOTPSlot
+                    index={0}
+                    className="size-12 rounded-lg border text-lg"
+                  />
+                  <InputOTPSlot
+                    index={1}
+                    className="size-12 rounded-lg border text-lg"
+                  />
+                  <InputOTPSlot
+                    index={2}
+                    className="size-12 rounded-lg border text-lg"
+                  />
+                  <InputOTPSlot
+                    index={3}
+                    className="size-12 rounded-lg border text-lg"
+                  />
+                  <InputOTPSlot
+                    index={4}
+                    className="size-12 rounded-lg border text-lg"
+                  />
+                  <InputOTPSlot
+                    index={5}
+                    className="size-12 rounded-lg border text-lg"
+                  />
+                </InputOTPGroup>
+              </InputOTP>
             </Field>
             {error && <FieldError>{error}</FieldError>}
-            <Button disabled={isSubmitting} type="submit">
+            <Button
+              disabled={isSubmitting}
+              type="submit"
+              size="lg"
+              className="w-full"
+            >
               {isSubmitting && <Spinner data-icon="inline-start" />}
               Verify and sign in
+              <ArrowRight data-icon="inline-end" />
             </Button>
             <Button
               disabled={cooldownSeconds > 0 || isSubmitting}
               onClick={requestCode}
               type="button"
-              variant="ghost"
+              variant="outline"
+              size="lg"
+              className="w-full"
             >
+              <Clock data-icon="inline-start" />
               {cooldownSeconds > 0
                 ? `Resend code in ${cooldownSeconds}s`
                 : "Resend code"}
             </Button>
+            <Button
+              disabled={isSubmitting}
+              onClick={useDifferentEmail}
+              type="button"
+              variant="ghost"
+            >
+              <ArrowLeft data-icon="inline-start" />
+              Use a different email
+            </Button>
+            <div className="flex flex-col items-center gap-1 pt-2 text-center">
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                <Lock className="size-4" />
+                Secure passwordless sign-in
+              </p>
+            </div>
           </FieldGroup>
         </form>
       </CardContent>

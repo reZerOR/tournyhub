@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 300" role="img" aria-labelledby="title desc">
+  <title id="title">TournyHub icon</title>
+  <desc id="desc">Faceted blue geometric T shield icon</desc>
+  <defs>
+    <linearGradient id="topBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2448FF"/>
+      <stop offset="0.55" stop-color="#145CFF"/>
+      <stop offset="1" stop-color="#0A36E6"/>
+    </linearGradient>
+    <linearGradient id="skyBlue" x1="0" y1="0" x2="0.95" y2="1">
+      <stop offset="0" stop-color="#63C8FF"/>
+      <stop offset="0.52" stop-color="#3C96FF"/>
+      <stop offset="1" stop-color="#1760F4"/>
+    </linearGradient>
+    <linearGradient id="royalBlue" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#214DFF"/>
+      <stop offset="1" stop-color="#0B35E7"/>
+    </linearGradient>
+    <linearGradient id="deepBlue" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#12358E"/>
+      <stop offset="1" stop-color="#061A55"/>
+    </linearGradient>
+  </defs>
+
+  <!-- top cap -->
+  <path d="M16 26 H304 L286 68 H196 V266 L170 286 L144 266 V68 H34 Z" fill="url(#topBlue)"/>
+
+  <!-- left top facet -->
+  <path d="M16 26 H103 L144 68 H34 Z" fill="url(#royalBlue)"/>
+
+  <!-- light central facet -->
+  <path d="M103 26 H196 V196 L144 144 V68 Z" fill="url(#skyBlue)"/>
+
+  <!-- deep lower stem facet -->
+  <path d="M144 144 L196 196 V266 L170 286 L144 266 Z" fill="url(#deepBlue)"/>
+
+  <!-- left pillar -->
+  <path d="M69 89 H121 V255 L69 221 Z" fill="url(#royalBlue)"/>
+  <path d="M69 89 H121 V141 Z" fill="#15398F"/>
+
+  <!-- right pillar -->
+  <path d="M219 89 H271 V221 L219 255 Z" fill="url(#skyBlue)"/>
+  <path d="M219 89 H271 V141 Z" fill="#123481"/>
+
+  <!-- subtle highlight strips -->
+  <path d="M144 68 H150 V263 L144 266 Z" fill="#2A60FF" opacity="0.35"/>
+  <path d="M219 89 H224 V252 L219 255 Z" fill="#245BFF" opacity="0.28"/>
+</svg>

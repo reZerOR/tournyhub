@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { serverEnv } from "@/config/server-env";
+import { AuthShell } from "@/features/identity/auth-shell";
 import { SignInForm } from "@/features/identity/sign-in-form";
 import { getCurrentSession } from "@/server/auth/session";
 
@@ -24,7 +25,7 @@ export default async function SignInPage({
   }
 
   return (
-    <main className="flex min-h-svh w-full items-center justify-center px-6 py-16">
+    <AuthShell>
       <SignInForm
         googleEnabled={Boolean(
           serverEnv.GOOGLE_CLIENT_ID && serverEnv.GOOGLE_CLIENT_SECRET,
@@ -32,6 +33,6 @@ export default async function SignInPage({
         next={target}
         oauthError={error}
       />
-    </main>
+    </AuthShell>
   );
 }

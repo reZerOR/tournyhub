@@ -3,13 +3,20 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "cn";
 
 const alertVariants = cva(
-  "group/alert relative grid w-full gap-0.5 rounded-lg border px-2.5 py-2 text-left text-sm has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-2 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-4",
+  "group/alert relative grid w-full gap-0.5 rounded-lg border px-3 py-2.5 text-left text-sm has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-2 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-card text-card-foreground",
+        default:
+          "border-arena-foreground/10 bg-arena/60 text-card-foreground backdrop-blur-sm",
         destructive:
-          "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+          "border-destructive/30 bg-destructive/10 text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+        neon: "border-neon/30 bg-neon/10 text-neon *:data-[slot=alert-description]:text-neon/80",
+        warning:
+          "border-warning/30 bg-warning/10 text-warning-foreground *:data-[slot=alert-description]:text-warning-foreground/80",
+        success:
+          "border-success/30 bg-success/10 text-success *:data-[slot=alert-description]:text-success/80",
+        live: "border-neon/40 bg-card/60 text-card-foreground arena-glow *:data-[slot=alert-description]:text-muted-foreground",
       },
     },
     defaultVariants: {

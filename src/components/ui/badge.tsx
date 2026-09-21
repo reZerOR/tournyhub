@@ -18,6 +18,15 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // Arena badges — neon outline for live states, soft tinted for category.
+        neon: "border border-neon/40 bg-neon/15 text-neon uppercase tracking-wide [a]:hover:bg-neon/25",
+        bid: "border border-bid/40 bg-bid/15 text-bid uppercase tracking-wide",
+        roster:
+          "border border-roster/40 bg-roster/15 text-roster [a]:hover:bg-roster/25",
+        warning:
+          "border border-warning/40 bg-warning/15 text-warning-foreground [a]:hover:bg-warning/25",
+        success:
+          "border border-success/40 bg-success/15 text-success [a]:hover:bg-success/25",
       },
     },
     defaultVariants: {

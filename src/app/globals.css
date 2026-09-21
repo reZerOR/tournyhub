@@ -9,7 +9,8 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-display);
+  --font-display: var(--font-display);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -39,6 +40,20 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-neon: var(--neon);
+  --color-neon-foreground: var(--neon-foreground);
+  --color-arena: var(--arena);
+  --color-arena-foreground: var(--arena-foreground);
+  --color-bid: var(--bid);
+  --color-bid-foreground: var(--bid-foreground);
+  --color-roster: var(--roster);
+  --color-roster-foreground: var(--roster-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-spotlight: var(--spotlight);
+  --color-spotlight-foreground: var(--spotlight-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -46,75 +61,147 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Glow shadows used by arena surfaces */
+  --shadow-arena-glow:
+    0 0 0 1px color-mix(in oklab, var(--neon) 35%, transparent),
+    0 8px 32px -8px color-mix(in oklab, var(--neon) 45%, transparent),
+    inset 0 1px 0 0 color-mix(in oklab, var(--foreground) 6%, transparent);
+  --shadow-arena-panel:
+    0 0 0 1px color-mix(in oklab, var(--foreground) 8%, transparent),
+    0 24px 64px -24px color-mix(in oklab, var(--background) 90%, transparent),
+    inset 0 1px 0 0 color-mix(in oklab, var(--foreground) 5%, transparent);
+  --shadow-arena-trophy:
+    0 0 64px -8px color-mix(in oklab, var(--neon) 80%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--neon) 50%, transparent);
 }
+
+/*
+  TournyHub — Arena Theme
+
+  The interface is the field of play. Every surface treats dark canvas as the
+  playing surface, electric neon as the stage lights, and royal blue as the
+  house color. Light mode keeps the same semantic roles but lifts the canvas
+  to a bright studio backdrop so designers and organizers can review rosters
+  without eye fatigue.
+*/
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Light mode — studio backdrop with neon accents. */
+  --background: oklch(0.985 0.005 240);
+  --foreground: oklch(0.18 0.04 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.18 0.04 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --popover-foreground: oklch(0.18 0.04 260);
+
+  /* Royal blue — TournyHub's brand voice. */
+  --primary: oklch(0.42 0.18 264);
+  --primary-foreground: oklch(0.98 0.01 240);
+
+  --muted: oklch(0.96 0.01 240);
+  --muted-foreground: oklch(0.5 0.03 255);
+  --secondary: oklch(0.94 0.02 245);
+  --secondary-foreground: oklch(0.22 0.04 260);
+  --accent: oklch(0.94 0.04 250);
+  --accent-foreground: oklch(0.22 0.05 260);
+
+  --destructive: oklch(0.55 0.22 27);
+  --border: oklch(0.9 0.015 245);
+  --input: oklch(0.9 0.015 245);
+  --ring: oklch(0.6 0.16 255);
+
+  --chart-1: oklch(0.6 0.2 255);
+  --chart-2: oklch(0.7 0.18 220);
+  --chart-3: oklch(0.65 0.2 295);
+  --chart-4: oklch(0.7 0.18 175);
+  --chart-5: oklch(0.65 0.22 35);
+
+  --sidebar: oklch(0.98 0.005 240);
+  --sidebar-foreground: oklch(0.22 0.04 260);
+  --sidebar-primary: oklch(0.42 0.18 264);
+  --sidebar-primary-foreground: oklch(0.98 0.01 240);
+  --sidebar-accent: oklch(0.94 0.02 245);
+  --sidebar-accent-foreground: oklch(0.22 0.04 260);
+  --sidebar-border: oklch(0.9 0.015 245);
+  --sidebar-ring: oklch(0.6 0.16 255);
+
+  /* Tournament semantics — visible in both modes. */
+  --arena: oklch(0.96 0.01 240);
+  --arena-foreground: oklch(0.22 0.04 260);
+  --neon: oklch(0.7 0.2 235);
+  --neon-foreground: oklch(0.12 0.05 260);
+  --bid: oklch(0.65 0.22 295);
+  --bid-foreground: oklch(0.98 0.01 240);
+  --roster: oklch(0.7 0.18 175);
+  --roster-foreground: oklch(0.16 0.04 175);
+  --warning: oklch(0.78 0.18 75);
+  --warning-foreground: oklch(0.25 0.05 60);
+  --success: oklch(0.7 0.18 150);
+  --success-foreground: oklch(0.18 0.04 150);
+  --spotlight: oklch(0.18 0.04 260);
+  --spotlight-foreground: oklch(0.98 0.01 240);
+
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
 }
 
+/*
+  Dark mode is the house style. Default appearance for organizers and team reps.
+  Drops the canvas to deep navy, raises the neon to electric cyan, and pulls
+  every UI panel into a glassy arena surface.
+*/
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --background: oklch(0.13 0.025 260);
+  --foreground: oklch(0.96 0.01 240);
+  --card: oklch(0.18 0.03 260);
+  --card-foreground: oklch(0.96 0.01 240);
+  --popover: oklch(0.2 0.03 260);
+  --popover-foreground: oklch(0.96 0.01 240);
+
+  --primary: oklch(0.72 0.2 235);
+  --primary-foreground: oklch(0.12 0.04 260);
+
+  --secondary: oklch(0.24 0.03 260);
+  --secondary-foreground: oklch(0.96 0.01 240);
+  --muted: oklch(0.22 0.025 260);
+  --muted-foreground: oklch(0.7 0.02 240);
+  --accent: oklch(0.26 0.05 245);
+  --accent-foreground: oklch(0.96 0.01 240);
+
+  --destructive: oklch(0.7 0.22 22);
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.78 0.18 235);
+
+  --chart-1: oklch(0.72 0.2 235);
+  --chart-2: oklch(0.74 0.18 195);
+  --chart-3: oklch(0.7 0.22 295);
+  --chart-4: oklch(0.78 0.18 165);
+  --chart-5: oklch(0.74 0.2 35);
+
+  --sidebar: oklch(0.16 0.025 260);
+  --sidebar-foreground: oklch(0.96 0.01 240);
+  --sidebar-primary: oklch(0.72 0.2 235);
+  --sidebar-primary-foreground: oklch(0.12 0.04 260);
+  --sidebar-accent: oklch(0.24 0.03 260);
+  --sidebar-accent-foreground: oklch(0.96 0.01 240);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.78 0.18 235);
+
+  --arena: oklch(0.11 0.025 260);
+  --arena-foreground: oklch(0.96 0.01 240);
+  --neon: oklch(0.78 0.22 235);
+  --neon-foreground: oklch(0.1 0.04 260);
+  --bid: oklch(0.72 0.24 295);
+  --bid-foreground: oklch(0.98 0.01 240);
+  --roster: oklch(0.78 0.18 175);
+  --roster-foreground: oklch(0.16 0.04 175);
+  --warning: oklch(0.82 0.18 75);
+  --warning-foreground: oklch(0.18 0.04 60);
+  --success: oklch(0.78 0.18 150);
+  --success-foreground: oklch(0.18 0.04 150);
+  --spotlight: oklch(0.05 0.02 260);
+  --spotlight-foreground: oklch(0.98 0.01 240);
 }
 
 @layer base {
@@ -151,5 +238,70 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
     }
+  }
+}
+
+@layer utilities {
+  /* Glassy arena panel — used by AuctionPanel, BidConsole, RosterCard. */
+  .arena-panel {
+    background: color-mix(in oklab, var(--card) 88%, transparent);
+    box-shadow: var(--shadow-arena-panel);
+    border: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent);
+    backdrop-filter: blur(8px);
+  }
+  /* Neon-rimmed surface for live auction displays and trophy spotlights. */
+  .arena-glow {
+    background: color-mix(in oklab, var(--card) 88%, transparent);
+    box-shadow: var(--shadow-arena-glow);
+    border: 1px solid color-mix(in oklab, var(--neon) 35%, transparent);
+    backdrop-filter: blur(10px);
+  }
+  /* Tilted banner ribbons like the "TEAMS / BID / PLAYERS" signs in the hero. */
+  .arena-banner {
+    background: color-mix(in oklab, var(--card) 70%, transparent);
+    border: 1px solid color-mix(in oklab, var(--neon) 40%, transparent);
+    clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 100%, 18px 100%);
+  }
+  /* Grid of light rays used behind Live Auction consoles. */
+  .arena-spotlight {
+    background:
+      radial-gradient(
+        ellipse at top,
+        color-mix(in oklab, var(--neon) 28%, transparent) 0%,
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse at bottom,
+        color-mix(in oklab, var(--bid) 18%, transparent) 0%,
+        transparent 55%
+      ),
+      var(--spotlight);
+  }
+  /* Live bidding pulse — used by LiveBadge and the current bid amount. */
+  .arena-pulse {
+    animation: arena-pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes arena-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--neon) 55%, transparent);
+      opacity: 1;
+    }
+    50% {
+      box-shadow: 0 0 0 12px color-mix(in oklab, var(--neon) 0%, transparent);
+      opacity: 0.85;
+    }
+  }
+  .arena-text-glow {
+    text-shadow: 0 0 24px color-mix(in oklab, var(--neon) 60%, transparent);
+  }
+  .arena-divider {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      color-mix(in oklab, var(--neon) 60%, transparent),
+      transparent
+    );
   }
 }
