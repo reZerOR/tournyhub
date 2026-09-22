@@ -265,6 +265,7 @@ export interface OpenSale {
   saleId: string;
   source: "bid" | "forced";
   teamId: string;
+  tierId: null | string;
 }
 
 /** Every committed Sale the Organizer may still reverse. */
@@ -279,9 +280,10 @@ export async function loadOpenSales(
     player_entry_id: string;
     source: "bid" | "forced";
     team_id: string;
+    tier_id: null | string;
   }>(
     `select s."id", s."amount", s."source", s."team_id", s."player_entry_id",
-            pe."display_name"
+            pe."display_name", pe."tier_id"
        from "sale" s
        join "player_entry" pe on pe."id" = s."player_entry_id"
       where s."auction_id" = $1 and s."reversed_at" is null
@@ -295,5 +297,6 @@ export async function loadOpenSales(
     saleId: row.id,
     source: row.source,
     teamId: row.team_id,
+    tierId: row.tier_id,
   }));
 }

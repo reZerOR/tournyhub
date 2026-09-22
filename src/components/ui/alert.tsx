@@ -13,7 +13,7 @@ const alertVariants = cva(
           "border-destructive/30 bg-destructive/10 text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
         neon: "border-neon/30 bg-neon/10 text-neon *:data-[slot=alert-description]:text-neon/80",
         warning:
-          "border-warning/30 bg-warning/10 text-warning-foreground *:data-[slot=alert-description]:text-warning-foreground/80",
+          "border-warning/30 bg-warning/10 text-warning *:data-[slot=alert-description]:text-warning/80",
         success:
           "border-success/30 bg-success/10 text-success *:data-[slot=alert-description]:text-success/80",
         live: "border-neon/40 bg-card/60 text-card-foreground arena-glow *:data-[slot=alert-description]:text-muted-foreground",

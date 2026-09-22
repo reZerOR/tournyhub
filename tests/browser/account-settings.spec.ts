@@ -33,24 +33,25 @@ async function signIn(page: Page, email: string): Promise<void> {
   await expect(page).toHaveURL(/\/app$/);
 }
 
-test("a User can update persistent account preferences", async ({ page }) => {
-  await signIn(page, uniqueEmail("preferences"));
+test("a User can update a persistent account profile", async ({ page }) => {
+  await signIn(page, uniqueEmail("profile"));
   await page.getByRole("link", { exact: true, name: "Account" }).click();
   await expect(page).toHaveURL(/\/app\/account$/);
   await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect(page.getByRole("heading", { name: "Preferences" })).toHaveCount(
+    0,
+  );
 
   await page.getByLabel("Display name").fill("Tournament Director");
-  await page.getByRole("switch", { name: "Live sounds" }).click();
-  await page.getByRole("button", { name: "Save preferences" }).click();
+  await page.getByRole("button", { name: "Save profile" }).click();
 
-  await expect(page.getByRole("status")).toHaveText("Preferences saved.");
+  await expect(page.getByRole("status")).toHaveText("Profile updated.");
   await expect(page.locator("html")).toHaveClass(/dark/);
   await page.reload();
   await expect(page.getByLabel("Display name")).toHaveValue(
     "Tournament Director",
   );
   await expect(page.locator("html")).toHaveClass(/dark/);
-  await expect(page.getByRole("switch", { name: "Live sounds" })).toBeChecked();
 });
 
 test("a User can inspect sessions and sign out every session", async ({

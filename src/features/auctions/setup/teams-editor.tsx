@@ -1,20 +1,26 @@
 "use client";
 
-import Image from "next/image";
 import { type FormEvent, useState } from "react";
 
+import { StationGroup, StationPlate } from "@/components/arena";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { TEAM_LIMITS } from "@/domain/team";
 import type { TeamCountResult } from "@/domain/team-calculator";
+import {
+  SaveReadout,
+  type SaveState,
+} from "@/features/auctions/setup/save-readout";
 import {
   applyCalculatedTeamsAction,
   calculateTeamCountsAction,
@@ -25,6 +31,8 @@ import {
   setTeamLogoAction,
   updateTeamAction,
 } from "@/features/auctions/setup/team-actions";
+import { TeamColorInput } from "@/features/auctions/setup/team-color-input";
+import { TeamTable } from "@/features/auctions/setup/team-table";
 import type { SerializedTeam } from "@/features/auctions/setup/serialize-team";
 
 interface TeamFormValues {
@@ -33,12 +41,6 @@ interface TeamFormValues {
 }
 
 const EMPTY_TEAM: TeamFormValues = { color: "", name: "" };
-
-function representativeLabel(team: SerializedTeam): string {
-  if (team.representativeType === "player") return "Player Representative";
-  if (team.representativeType === "outside") return "Outside Representative";
-  return "No representative";
-}
 
 export function TeamsEditor({
   auctionId,
@@ -50,13 +52,20 @@ export function TeamsEditor({
   const [teams, setTeams] = useState(initialTeams);
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<null | string>(null);
-  const [hasSaved, setHasSaved] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
 
+  // Add Team Modal
+  const [isAddOpen, setIsAddOpen] = useState(false);
   const [newTeam, setNewTeam] = useState<TeamFormValues>(EMPTY_TEAM);
+  const [addError, setAddError] = useState<null | string>(null);
+
+  // Edit Team Modal
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingId, setEditingId] = useState<null | string>(null);
   const [editing, setEditing] = useState<TeamFormValues>(EMPTY_TEAM);
   const [editingError, setEditingError] = useState<null | string>(null);
 
+  // Calculator
   const [minRosterSize, setMinRosterSize] = useState("");
   const [maxRosterSize, setMaxRosterSize] = useState("");
   const [counts, setCounts] = useState<null | TeamCountResult>(null);
@@ -65,17 +74,19 @@ export function TeamsEditor({
 
   function reportSaved() {
     setErrorMessage(null);
-    setHasSaved(true);
+    setSaveState("saved");
   }
 
   function reportError(message: string) {
-    setHasSaved(false);
+    setSaveState("error");
     setErrorMessage(message);
   }
 
-  async function addTeam(event: FormEvent) {
+  async function handleAddTeam(event: FormEvent) {
     event.preventDefault();
     setPending(true);
+    setSaveState("saving");
+    setAddError(null);
     const result = await createTeamAction(auctionId, newTeam);
     setPending(false);
     if (result.status === "saved") {
@@ -83,36 +94,56 @@ export function TeamsEditor({
         [...previous, result.team].sort((a, b) => a.position - b.position),
       );
       setNewTeam(EMPTY_TEAM);
+      setIsAddOpen(false);
       reportSaved();
     } else {
+      setAddError(result.message);
       reportError(result.message);
     }
   }
 
-  async function saveTeam(event: FormEvent) {
+  function openEditModal(team: SerializedTeam) {
+    setEditingId(team.id);
+    setEditing({
+      color: team.color ?? "",
+      name: team.name ?? "",
+    });
+    setEditingError(null);
+    setIsEditOpen(true);
+  }
+
+  async function handleSaveTeam(event: FormEvent) {
     event.preventDefault();
     if (!editingId) return;
     setPending(true);
+    setSaveState("saving");
+    setEditingError(null);
     const result = await updateTeamAction(auctionId, editingId, editing);
     setPending(false);
     if (result.status === "saved") {
       setTeams((previous) =>
         previous.map((team) => (team.id === editingId ? result.team : team)),
       );
+      setIsEditOpen(false);
       setEditingId(null);
-      setEditingError(null);
       reportSaved();
     } else {
+      setSaveState("error");
       setEditingError(result.message);
     }
   }
 
   async function removeTeam(teamId: string) {
     setPending(true);
+    setSaveState("saving");
     const result = await deleteTeamAction(auctionId, teamId);
     setPending(false);
     if (result.status === "saved") {
       setTeams((previous) => previous.filter((team) => team.id !== teamId));
+      if (editingId === teamId) {
+        setIsEditOpen(false);
+        setEditingId(null);
+      }
       reportSaved();
     } else {
       reportError(result.message);
@@ -121,6 +152,7 @@ export function TeamsEditor({
 
   async function move(teamId: string, direction: "down" | "up") {
     setPending(true);
+    setSaveState("saving");
     const result = await moveTeamAction(auctionId, teamId, direction);
     setPending(false);
     if (result.status === "saved") {
@@ -135,6 +167,7 @@ export function TeamsEditor({
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     setPending(true);
+    setSaveState("saving");
     const result = await setTeamLogoAction(auctionId, teamId, formData);
     setPending(false);
     if (result.status === "saved") {
@@ -150,6 +183,7 @@ export function TeamsEditor({
 
   async function removeLogo(teamId: string) {
     setPending(true);
+    setSaveState("saving");
     const result = await removeTeamLogoAction(auctionId, teamId);
     setPending(false);
     if (result.status === "saved") {
@@ -199,228 +233,126 @@ export function TeamsEditor({
     }
   }
 
+  const unnamedCount = teams.filter((team) => team.name === null).length;
+
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle aria-level={2} role="heading">
-            Teams
-          </CardTitle>
-          <CardDescription>
-            Create Teams with unique names, or calculate how many the current
-            Players can fill.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
-          <form className="flex flex-wrap items-end gap-3" onSubmit={addTeam}>
-            <Field className="max-w-xs">
-              <FieldLabel htmlFor="new-team-name">Team name</FieldLabel>
-              <Input
-                id="new-team-name"
-                maxLength={TEAM_LIMITS.nameMax}
-                onChange={(event) =>
-                  setNewTeam((previous) => ({
-                    ...previous,
-                    name: event.target.value,
-                  }))
-                }
-                value={newTeam.name}
-              />
-            </Field>
-            <Field className="max-w-40">
-              <FieldLabel htmlFor="new-team-color">Color</FieldLabel>
-              <Input
-                id="new-team-color"
-                onChange={(event) =>
-                  setNewTeam((previous) => ({
-                    ...previous,
-                    color: event.target.value,
-                  }))
-                }
-                placeholder="#1a2b3c"
-                value={newTeam.color}
-              />
-            </Field>
-            <Button disabled={pending} type="submit">
-              Add Team
-            </Button>
+    <div className="flex flex-col gap-5">
+      <StationPlate
+        label="Teams"
+        stat={
+          <>
+            <span className="text-muted-foreground/70">
+              {teams.length} of {TEAM_LIMITS.maxTeams}
+              {unnamedCount > 0 ? ` · ${unnamedCount} unnamed` : ""}
+            </span>
+            <SaveReadout message={errorMessage} state={saveState} />
+          </>
+        }
+      >
+        <StationGroup label="Current Teams">
+          <TeamTable
+            onAddClick={() => {
+              setNewTeam(EMPTY_TEAM);
+              setAddError(null);
+              setIsAddOpen(true);
+            }}
+            onEditClick={openEditModal}
+            onMoveClick={move}
+            onRemoveClick={removeTeam}
+            onRemoveLogoClick={removeLogo}
+            onUploadLogoSubmit={uploadLogo}
+            pending={pending}
+            teams={teams}
+          />
+        </StationGroup>
+      </StationPlate>
+
+      {/* Add Team Modal */}
+      <Dialog onOpenChange={setIsAddOpen} open={isAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Team</DialogTitle>
+            <DialogDescription>
+              Create a new team for this auction roster.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddTeam}>
+            <div className="flex flex-col gap-4 py-2">
+              <Field>
+                <FieldLabel htmlFor="new-team-name">Team name</FieldLabel>
+                <Input
+                  id="new-team-name"
+                  maxLength={TEAM_LIMITS.nameMax}
+                  onChange={(event) =>
+                    setNewTeam((previous) => ({
+                      ...previous,
+                      name: event.target.value,
+                    }))
+                  }
+                  placeholder="e.g. Thunderbolts"
+                  value={newTeam.name}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="new-team-color">Team color</FieldLabel>
+                <TeamColorInput
+                  id="new-team-color"
+                  onChange={(color) =>
+                    setNewTeam((previous) => ({
+                      ...previous,
+                      color,
+                    }))
+                  }
+                  value={newTeam.color}
+                />
+              </Field>
+
+              {addError && (
+                <Alert variant="destructive">
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{addError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+
+            <DialogFooter className="mt-4">
+              <Button
+                onClick={() => setIsAddOpen(false)}
+                type="button"
+                variant="outline"
+              >
+                Cancel
+              </Button>
+              <Button disabled={pending} type="submit">
+                {pending ? "Adding..." : "Add Team"}
+              </Button>
+            </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
 
-          <p
-            aria-live="polite"
-            className="text-sm text-muted-foreground"
-            role="status"
-          >
-            {pending
-              ? "Saving…"
-              : errorMessage
-                ? `Failed to save: ${errorMessage}`
-                : hasSaved
-                  ? "Saved"
-                  : ""}
-          </p>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <caption className="sr-only">Teams</caption>
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium" scope="col">
-                    Order
-                  </th>
-                  <th className="py-2 pr-3 font-medium" scope="col">
-                    Name
-                  </th>
-                  <th className="py-2 pr-3 font-medium" scope="col">
-                    Color
-                  </th>
-                  <th className="py-2 pr-3 font-medium" scope="col">
-                    Logo
-                  </th>
-                  <th className="py-2 pr-3 font-medium" scope="col">
-                    Representative
-                  </th>
-                  <th className="py-2 font-medium" scope="col">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {teams.length === 0 && (
-                  <tr>
-                    <td className="py-3 text-muted-foreground" colSpan={6}>
-                      You haven&apos;t created any Teams yet.
-                    </td>
-                  </tr>
-                )}
-                {teams.map((team, index) => (
-                  <tr
-                    className="border-b align-top last:border-0"
-                    key={team.id}
-                  >
-                    <td className="py-2 pr-3">
-                      <div className="flex gap-1">
-                        <Button
-                          aria-label={`Move ${team.name ?? "Team"} up`}
-                          disabled={pending || index === 0}
-                          onClick={() => move(team.id, "up")}
-                          size="sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          ↑
-                        </Button>
-                        <Button
-                          aria-label={`Move ${team.name ?? "Team"} down`}
-                          disabled={pending || index === teams.length - 1}
-                          onClick={() => move(team.id, "down")}
-                          size="sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          ↓
-                        </Button>
-                      </div>
-                    </td>
-                    <td className="py-2 pr-3">{team.name ?? "Unnamed Team"}</td>
-                    <td className="py-2 pr-3">
-                      {team.color ? (
-                        <span className="flex items-center gap-2">
-                          <span
-                            aria-hidden
-                            className="inline-block size-4 rounded-full border"
-                            style={{ backgroundColor: team.color }}
-                          />
-                          {team.color}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <div className="flex flex-col gap-2">
-                        {team.logoHref && (
-                          <Image
-                            alt={`${team.name ?? "Team"} logo`}
-                            className="size-8 rounded"
-                            height={32}
-                            src={team.logoHref}
-                            width={32}
-                          />
-                        )}
-                        <form
-                          className="flex items-center gap-1"
-                          onSubmit={(event) => uploadLogo(event, team.id)}
-                        >
-                          <Input
-                            accept="image/png"
-                            aria-label={`Logo for ${team.name ?? "Team"}`}
-                            className="max-w-40"
-                            name="logo"
-                            type="file"
-                          />
-                          <Button
-                            disabled={pending}
-                            size="sm"
-                            type="submit"
-                            variant="outline"
-                          >
-                            Upload
-                          </Button>
-                        </form>
-                        {team.logoHref && (
-                          <Button
-                            disabled={pending}
-                            onClick={() => removeLogo(team.id)}
-                            size="sm"
-                            type="button"
-                            variant="ghost"
-                          >
-                            Remove logo
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 pr-3">{representativeLabel(team)}</td>
-                    <td className="py-2">
-                      <div className="flex gap-1">
-                        <Button
-                          onClick={() => {
-                            setEditingId(team.id);
-                            setEditing({
-                              color: team.color ?? "",
-                              name: team.name ?? "",
-                            });
-                            setEditingError(null);
-                          }}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          onClick={() => removeTeam(team.id)}
-                          size="sm"
-                          type="button"
-                          variant="destructive"
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {editingId && (
-            <form
-              className="flex flex-wrap items-end gap-3 rounded-lg border p-3"
-              onSubmit={saveTeam}
-            >
-              <Field className="max-w-xs">
+      {/* Edit Team Modal */}
+      <Dialog
+        onOpenChange={(open) => {
+          setIsEditOpen(open);
+          if (!open) {
+            setEditingId(null);
+            setEditingError(null);
+          }
+        }}
+        open={isEditOpen}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Team</DialogTitle>
+            <DialogDescription>
+              Update name and color for {editing.name || "this team"}.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveTeam}>
+            <div className="flex flex-col gap-4 py-2">
+              <Field>
                 <FieldLabel htmlFor="edit-team-name">Team name</FieldLabel>
                 <Input
                   id="edit-team-name"
@@ -431,129 +363,126 @@ export function TeamsEditor({
                       name: event.target.value,
                     }))
                   }
+                  placeholder="e.g. Thunderbolts"
                   value={editing.name}
                 />
               </Field>
-              <Field className="max-w-40">
-                <FieldLabel htmlFor="edit-team-color">Color</FieldLabel>
-                <Input
+
+              <Field>
+                <FieldLabel htmlFor="edit-team-color">Team color</FieldLabel>
+                <TeamColorInput
                   id="edit-team-color"
-                  onChange={(event) =>
+                  onChange={(color) =>
                     setEditing((previous) => ({
                       ...previous,
-                      color: event.target.value,
+                      color,
                     }))
                   }
-                  placeholder="#1a2b3c"
                   value={editing.color}
                 />
               </Field>
-              <Button disabled={pending} type="submit">
-                Save Team
-              </Button>
+
+              {editingError && (
+                <Alert variant="destructive">
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{editingError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+
+            <DialogFooter className="mt-4">
               <Button
-                onClick={() => {
-                  setEditingId(null);
-                  setEditingError(null);
-                }}
+                onClick={() => setIsEditOpen(false)}
                 type="button"
-                variant="ghost"
+                variant="outline"
               >
                 Cancel
               </Button>
-              {editingError && <FieldError>{editingError}</FieldError>}
-            </form>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle aria-level={2} role="heading">
-            Calculate Teams
-          </CardTitle>
-          <CardDescription>
-            Enter the total minimum and maximum Roster sizes. Every feasible
-            Team count is shown with one recommendation.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <form className="flex flex-wrap items-end gap-3" onSubmit={calculate}>
-            <Field className="max-w-40">
-              <FieldLabel htmlFor="calc-roster-min">
-                Minimum Roster size
-              </FieldLabel>
-              <Input
-                id="calc-roster-min"
-                inputMode="numeric"
-                onChange={(event) => setMinRosterSize(event.target.value)}
-                value={minRosterSize}
-              />
-            </Field>
-            <Field className="max-w-40">
-              <FieldLabel htmlFor="calc-roster-max">
-                Maximum Roster size
-              </FieldLabel>
-              <Input
-                id="calc-roster-max"
-                inputMode="numeric"
-                onChange={(event) => setMaxRosterSize(event.target.value)}
-                value={maxRosterSize}
-              />
-            </Field>
-            <Button disabled={pending} type="submit">
-              Calculate
-            </Button>
+              <Button disabled={pending} type="submit">
+                {pending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
 
-          {calculatorError && <FieldError>{calculatorError}</FieldError>}
+      {/* Calculate Teams section */}
+      <StationPlate label="Calculate Teams" variant="section">
+        <form className="flex flex-wrap items-end gap-3" onSubmit={calculate}>
+          <Field className="max-w-44">
+            <FieldLabel htmlFor="calc-roster-min">
+              Minimum Roster size
+            </FieldLabel>
+            <Input
+              className="font-mono tabular-nums"
+              id="calc-roster-min"
+              inputMode="numeric"
+              onChange={(event) => setMinRosterSize(event.target.value)}
+              value={minRosterSize}
+            />
+          </Field>
+          <Field className="max-w-44">
+            <FieldLabel htmlFor="calc-roster-max">
+              Maximum Roster size
+            </FieldLabel>
+            <Input
+              className="font-mono tabular-nums"
+              id="calc-roster-max"
+              inputMode="numeric"
+              onChange={(event) => setMaxRosterSize(event.target.value)}
+              value={maxRosterSize}
+            />
+          </Field>
+          <Button disabled={pending} type="submit" variant="secondary">
+            Calculate
+          </Button>
+        </form>
 
-          {counts && (
-            <div className="flex flex-col gap-3">
-              {counts.feasibleCounts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {counts.explanation}
-                </p>
-              ) : (
-                <>
-                  <p className="text-sm">
-                    Feasible Team counts: {counts.feasibleCounts.join(", ")}.
-                    Recommended: {counts.recommendation}.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {counts.feasibleCounts.map((count) => (
-                      <Button
-                        key={count}
-                        onClick={() => setSelectedCount(count)}
-                        type="button"
-                        variant={
-                          selectedCount === count ? "default" : "outline"
-                        }
-                      >
-                        {count} Teams
-                        {counts.recommendation === count
-                          ? " (recommended)"
-                          : ""}
-                      </Button>
-                    ))}
-                  </div>
-                  <div>
-                    <Button
-                      disabled={pending || selectedCount === null}
-                      onClick={() =>
-                        selectedCount !== null && applyCount(selectedCount)
-                      }
-                      type="button"
-                    >
-                      Create {selectedCount ?? 0} unnamed Teams
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        {calculatorError && <FieldError>{calculatorError}</FieldError>}
+
+        {counts &&
+          (counts.feasibleCounts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {counts.explanation}
+            </p>
+          ) : (
+            <>
+              <p className="font-mono text-xs text-muted-foreground tabular-nums">
+                Feasible Team counts: {counts.feasibleCounts.join(", ")}.
+                Recommended: {counts.recommendation}.
+              </p>
+              <div
+                aria-label="Feasible Team counts"
+                className="flex flex-wrap gap-2"
+                role="group"
+              >
+                {counts.feasibleCounts.map((count) => (
+                  <Button
+                    aria-pressed={selectedCount === count}
+                    key={count}
+                    onClick={() => setSelectedCount(count)}
+                    type="button"
+                    variant={selectedCount === count ? "default" : "outline"}
+                  >
+                    {count} Teams
+                    {counts.recommendation === count ? " (recommended)" : ""}
+                  </Button>
+                ))}
+              </div>
+              <div>
+                <Button
+                  disabled={pending || selectedCount === null}
+                  onClick={() =>
+                    selectedCount !== null && applyCount(selectedCount)
+                  }
+                  type="button"
+                >
+                  Create {selectedCount ?? 0} unnamed Teams
+                </Button>
+              </div>
+            </>
+          ))}
+      </StationPlate>
     </div>
   );
 }

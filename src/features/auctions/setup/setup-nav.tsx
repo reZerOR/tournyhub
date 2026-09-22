@@ -1,53 +1,49 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  CheckCircle2,
+  Layers,
+  Scroll,
+  Shield,
+  Sliders,
+  UserCheck,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
-import { cn } from "cn";
+import { StationRail, StationRailItem } from "@/components/arena";
+import type { SetupStation } from "@/features/auctions/setup/setup-stations";
 
-const SETUP_SECTIONS = [
-  { label: "Basics", slug: "basics" },
-  { label: "Players", slug: "players" },
-  { label: "Teams", slug: "teams" },
-  { label: "Representatives", slug: "representatives" },
-  { label: "Rules", slug: "rules" },
-  { label: "Tiers", slug: "tiers", tieredOnly: true },
-  { label: "Readiness", slug: "readiness" },
-] as const;
+const STATION_ICONS: Record<string, LucideIcon> = {
+  Basics: Sliders,
+  Players: Users,
+  Readiness: CheckCircle2,
+  Representatives: UserCheck,
+  Rules: Scroll,
+  Teams: Shield,
+  Tiers: Layers,
+};
 
-export function SetupNav({
-  auctionId,
-  rulesMode,
-}: {
-  auctionId: string;
-  rulesMode: "simple" | "tiered";
-}) {
+export function SetupNav({ stations }: { stations: SetupStation[] }) {
   const pathname = usePathname();
 
   return (
-    <nav
-      aria-label="Auction setup"
-      className="flex gap-1 overflow-x-auto pb-2 md:flex-col md:overflow-visible md:pb-0"
-    >
-      {SETUP_SECTIONS.filter(
-        (section) => !("tieredOnly" in section) || rulesMode === "tiered",
-      ).map((section) => {
-        const href = `/app/auctions/${auctionId}/setup/${section.slug}`;
-        const isActive = pathname === href;
+    <StationRail>
+      {stations.map((station) => {
+        const Icon = STATION_ICONS[station.label];
         return (
-          <Link
-            key={section.slug}
-            aria-current={isActive ? "page" : undefined}
-            className={cn(
-              "rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-              isActive && "bg-muted text-foreground",
-            )}
-            href={href}
-          >
-            {section.label}
-          </Link>
+          <StationRailItem
+            active={pathname === station.href}
+            href={station.href}
+            icon={Icon}
+            key={station.href}
+            label={station.label}
+            outstanding={station.outstanding}
+            state={station.state}
+          />
         );
       })}
-    </nav>
+    </StationRail>
   );
 }

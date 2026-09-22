@@ -27,6 +27,7 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -93,8 +94,8 @@
   --popover: oklch(0.2 0.03 260);
   --popover-foreground: oklch(0.96 0.01 240);
 
-  --primary: oklch(0.72 0.2 235);
-  --primary-foreground: oklch(0.12 0.04 260);
+  --primary: oklch(0.78 0.13 235);
+  --primary-foreground: oklch(0.08 0.02 260);
 
   --secondary: oklch(0.24 0.03 260);
   --secondary-foreground: oklch(0.96 0.01 240);
@@ -103,10 +104,11 @@
   --accent: oklch(0.26 0.05 245);
   --accent-foreground: oklch(0.96 0.01 240);
 
-  --destructive: oklch(0.7 0.22 22);
+  --destructive: oklch(0.8 0.11 22);
+  --destructive-foreground: oklch(0.08 0.02 22);
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.78 0.18 235);
+  --input: oklch(1 0 0 / 35%);
+  --ring: oklch(0.84 0.09 235);
 
   --chart-1: oklch(0.72 0.2 235);
   --chart-2: oklch(0.74 0.18 195);
@@ -116,23 +118,23 @@
 
   --sidebar: oklch(0.16 0.025 260);
   --sidebar-foreground: oklch(0.96 0.01 240);
-  --sidebar-primary: oklch(0.72 0.2 235);
-  --sidebar-primary-foreground: oklch(0.12 0.04 260);
+  --sidebar-primary: oklch(0.78 0.13 235);
+  --sidebar-primary-foreground: oklch(0.08 0.02 260);
   --sidebar-accent: oklch(0.24 0.03 260);
   --sidebar-accent-foreground: oklch(0.96 0.01 240);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.78 0.18 235);
+  --sidebar-ring: oklch(0.84 0.09 235);
 
   --arena: oklch(0.11 0.025 260);
   --arena-foreground: oklch(0.96 0.01 240);
-  --neon: oklch(0.78 0.22 235);
-  --neon-foreground: oklch(0.1 0.04 260);
-  --bid: oklch(0.72 0.24 295);
-  --bid-foreground: oklch(0.98 0.01 240);
-  --roster: oklch(0.78 0.18 175);
+  --neon: oklch(0.84 0.09 235);
+  --neon-foreground: oklch(0.08 0.02 260);
+  --bid: oklch(0.78 0.12 295);
+  --bid-foreground: oklch(0.08 0.02 295);
+  --roster: oklch(0.78 0.14 175);
   --roster-foreground: oklch(0.16 0.04 175);
-  --warning: oklch(0.82 0.18 75);
-  --warning-foreground: oklch(0.18 0.04 60);
+  --warning: oklch(0.82 0.15 75);
+  --warning-foreground: oklch(0.12 0.025 60);
   --success: oklch(0.78 0.18 150);
   --success-foreground: oklch(0.18 0.04 150);
   --spotlight: oklch(0.05 0.02 260);
@@ -193,11 +195,12 @@
     border: 1px solid color-mix(in oklab, var(--neon) 35%, transparent);
     backdrop-filter: blur(10px);
   }
-  /* Tilted banner ribbons like the "TEAMS / BID / PLAYERS" signs in the hero. */
+  /* Tilted banner ribbons like the "TEAMS / BID / PLAYERS" signs in the hero.
+     The slant is a variable so a smaller pennant keeps the same angle. */
   .arena-banner {
     background: color-mix(in oklab, var(--card) 70%, transparent);
     border: 1px solid color-mix(in oklab, var(--neon) 40%, transparent);
-    clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 100%, 18px 100%);
+    border-radius: var(--radius-md);
   }
   /* Grid of light rays used behind Live Auction consoles. */
   .arena-spotlight {
@@ -240,6 +243,24 @@
       color-mix(in oklab, var(--neon) 60%, transparent),
       transparent
     );
+  }
+  /*
+    The setup console is an official's table: dense numerals read for an
+    hour at a time. Text selection, the caret, and the scrollbars are the
+    browser defaults that belong to no design system, so they are themed
+    here for the console only.
+  */
+  .setup-console {
+    caret-color: var(--neon);
+  }
+  .setup-console ::selection {
+    background: color-mix(in oklab, var(--neon) 32%, transparent);
+    color: var(--foreground);
+  }
+  .setup-console * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 20%, transparent)
+      transparent;
   }
   /* The authenticated workspace continues the full-page sign-in arena. */
   .app-shell {

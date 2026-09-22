@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { StationPlate } from "@/components/arena";
 import { requireEditableAuction } from "@/features/auctions/setup/data";
 import { loadTiersBoardAction } from "@/features/auctions/setup/tier-actions";
 import { TiersEditor } from "@/features/auctions/setup/tiers-editor";
@@ -17,10 +19,17 @@ export default async function TiersSetupPage({
 
   if (auction.rulesMode !== "tiered") {
     return (
-      <p className="text-sm text-muted-foreground">
-        This Auction uses Simple Rules. Switch to Tiered Rules on the Rules
-        section to configure Tiers.
-      </p>
+      <StationPlate label="Tiers">
+        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+          <span>This Auction uses Simple Rules.</span>
+          <Link
+            className="font-mono text-xs text-neon underline-offset-4 hover:underline"
+            href={`/app/auctions/${id}/setup/rules`}
+          >
+            switch to Tiered Rules
+          </Link>
+        </p>
+      </StationPlate>
     );
   }
 
@@ -31,6 +40,7 @@ export default async function TiersSetupPage({
     <TiersEditor
       assignments={board.assignments}
       auctionId={id}
+      teamCount={board.teamCount}
       tiers={board.tiers}
     />
   );

@@ -2,14 +2,8 @@
 
 import { type FormEvent, useState } from "react";
 
+import { StationGroup, StationPlate } from "@/components/arena";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { RULE_LIMITS } from "@/domain/rules";
@@ -17,10 +11,52 @@ import {
   saveSimpleRulesAction,
   saveTieredRulesAction,
 } from "@/features/auctions/setup/rules-actions";
+import {
+  SaveReadout,
+  type SaveState,
+} from "@/features/auctions/setup/save-readout";
 import type { SerializedRuleSet } from "@/features/auctions/setup/serialize-team";
 
 function text(value: null | number): string {
   return value === null ? "" : String(value);
+}
+
+/*
+  Every Rule is a whole number with a unit, so the unit is drawn inside the
+  field rather than explained beneath it.
+*/
+function NumberField({
+  id,
+  label,
+  onChange,
+  unit,
+  value,
+}: {
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  unit?: string;
+  value: string;
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <div className="relative">
+        <Input
+          className="pr-9 font-mono tabular-nums"
+          id={id}
+          inputMode="numeric"
+          onChange={(event) => onChange(event.target.value)}
+          value={value}
+        />
+        {unit ? (
+          <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 font-mono text-xs text-muted-foreground">
+            {unit}
+          </span>
+        ) : null}
+      </div>
+    </Field>
+  );
 }
 
 export function RulesEditor({
@@ -46,12 +82,13 @@ export function RulesEditor({
   );
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<null | string>(null);
-  const [hasSaved, setHasSaved] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
 
   async function save(event: FormEvent) {
     event.preventDefault();
     setPending(true);
     setErrorMessage(null);
+    setSaveState("saving");
     const result =
       rulesMode === "tiered"
         ? await saveTieredRulesAction(auctionId, {
@@ -77,119 +114,103 @@ export function RulesEditor({
       setRosterMax(text(result.ruleSet.rosterMax));
       setDefaultStartingPrice(text(result.ruleSet.defaultStartingPrice));
       setTimedCloseSeconds(text(result.ruleSet.timedCloseSeconds));
-      setHasSaved(true);
+      setSaveState("saved");
     } else {
-      setHasSaved(false);
+      setSaveState("error");
       setErrorMessage(result.message);
     }
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle aria-level={2} role="heading">
-          Rules
-        </CardTitle>
-        <CardDescription>
-          {rulesMode === "tiered"
-            ? "Tiered Rules give every Team the same Budget, Bid Increment, and total Roster limits. Each Tier supplies its own Starting Price and per-Team counts."
-            : "Simple Rules give every Team the same Budget, Bid Increment, total Roster limits, and default Starting Price."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className="flex flex-col gap-4" onSubmit={save}>
-          <div className="flex flex-wrap gap-4">
-            <Field className="max-w-40">
-              <FieldLabel htmlFor="rules-budget">Budget</FieldLabel>
-              <Input
-                id="rules-budget"
-                inputMode="numeric"
-                onChange={(event) => setBudget(event.target.value)}
-                value={budget}
-              />
-            </Field>
-            <Field className="max-w-40">
-              <FieldLabel htmlFor="rules-increment">Bid Increment</FieldLabel>
-              <Input
-                id="rules-increment"
-                inputMode="numeric"
-                onChange={(event) => setBidIncrement(event.target.value)}
-                value={bidIncrement}
-              />
-            </Field>
-            <Field className="max-w-40">
-              <FieldLabel htmlFor="rules-roster-min">
-                Minimum Roster size
-              </FieldLabel>
-              <Input
-                id="rules-roster-min"
-                inputMode="numeric"
-                onChange={(event) => setRosterMin(event.target.value)}
-                value={rosterMin}
-              />
-            </Field>
-            <Field className="max-w-40">
-              <FieldLabel htmlFor="rules-roster-max">
-                Maximum Roster size
-              </FieldLabel>
-              <Input
-                id="rules-roster-max"
-                inputMode="numeric"
-                onChange={(event) => setRosterMax(event.target.value)}
-                value={rosterMax}
-              />
-            </Field>
-            {rulesMode === "simple" && (
-              <Field className="max-w-48">
-                <FieldLabel htmlFor="rules-starting-price">
-                  Default Starting Price
-                </FieldLabel>
-                <Input
-                  id="rules-starting-price"
-                  inputMode="numeric"
-                  onChange={(event) =>
-                    setDefaultStartingPrice(event.target.value)
-                  }
-                  value={defaultStartingPrice}
-                />
-              </Field>
-            )}
-            {closeMode === "timed" && (
-              <Field className="max-w-48">
-                <FieldLabel htmlFor="rules-timed-close">
-                  Timed Close (seconds)
-                </FieldLabel>
-                <Input
-                  id="rules-timed-close"
-                  inputMode="numeric"
-                  onChange={(event) => setTimedCloseSeconds(event.target.value)}
-                  value={timedCloseSeconds}
-                />
-              </Field>
-            )}
-          </div>
-
-          <p className="text-sm text-muted-foreground">
-            Budgets and prices are whole Credits, at most{" "}
-            {RULE_LIMITS.budgetMax.toLocaleString()} for a Budget.
-          </p>
-
-          {errorMessage && <FieldError>{errorMessage}</FieldError>}
-
-          <div className="flex items-center gap-3">
+    <form onSubmit={save}>
+      <StationPlate
+        footer={
+          <>
+            <p className="font-mono text-xs text-muted-foreground">
+              applies to every Team
+            </p>
             <Button disabled={pending} type="submit">
               Save Rules
             </Button>
-            <p
-              aria-live="polite"
-              className="text-sm text-muted-foreground"
-              role="status"
-            >
-              {pending ? "Saving…" : hasSaved ? "Saved" : ""}
-            </p>
+          </>
+        }
+        label="Rules"
+        stat={<SaveReadout message={errorMessage} state={saveState} />}
+      >
+        <StationGroup
+          hint={
+            rulesMode === "tiered"
+              ? `whole credits · max ${RULE_LIMITS.budgetMax.toLocaleString()} · price set per Tier`
+              : `whole credits · max ${RULE_LIMITS.budgetMax.toLocaleString()}`
+          }
+          label="Money"
+        >
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <NumberField
+              id="rules-budget"
+              label="Budget"
+              onChange={setBudget}
+              unit="cr"
+              value={budget}
+            />
+            <NumberField
+              id="rules-increment"
+              label="Bid Increment"
+              onChange={setBidIncrement}
+              unit="cr"
+              value={bidIncrement}
+            />
+            {rulesMode === "simple" && (
+              <NumberField
+                id="rules-starting-price"
+                label="Default Starting Price"
+                onChange={setDefaultStartingPrice}
+                unit="cr"
+                value={defaultStartingPrice}
+              />
+            )}
           </div>
-        </form>
-      </CardContent>
-    </Card>
+        </StationGroup>
+
+        <StationGroup
+          hint={`Players per Team · max ${RULE_LIMITS.rosterMax.toLocaleString()}`}
+          label="Roster"
+        >
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <NumberField
+              id="rules-roster-min"
+              label="Minimum Roster size"
+              onChange={setRosterMin}
+              value={rosterMin}
+            />
+            <NumberField
+              id="rules-roster-max"
+              label="Maximum Roster size"
+              onChange={setRosterMax}
+              value={rosterMax}
+            />
+          </div>
+        </StationGroup>
+
+        {closeMode === "timed" && (
+          <StationGroup
+            hint={`${RULE_LIMITS.timedCloseSecondsMin}–${RULE_LIMITS.timedCloseSecondsMax}s`}
+            label="Timing"
+          >
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <NumberField
+                id="rules-timed-close"
+                label="Timed Close (seconds)"
+                onChange={setTimedCloseSeconds}
+                unit="s"
+                value={timedCloseSeconds}
+              />
+            </div>
+          </StationGroup>
+        )}
+
+        {errorMessage && <FieldError>{errorMessage}</FieldError>}
+      </StationPlate>
+    </form>
   );
 }

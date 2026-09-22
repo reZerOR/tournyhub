@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 
 import {
+  isMustHaveTier,
   normalizeTierLabel,
   tierInputSchema,
   TIER_LIMITS,
@@ -284,9 +285,44 @@ export async function assignPlayerTier(
       return false;
     }
 
-    if (tierId !== null && !(await loadTierRow(client, auctionId, tierId))) {
-      await client.query("rollback");
-      throw new TierSetupError("That Tier is not in this Auction.");
+    if (tierId !== null) {
+      const tierRow = await loadTierRow(client, auctionId, tierId);
+      if (!tierRow) {
+        await client.query("rollback");
+        throw new TierSetupError("That Tier is not in this Auction.");
+      }
+
+      if (
+        isMustHaveTier({
+          maxPerTeam: tierRow.max_per_team,
+          minPerTeam: tierRow.min_per_team,
+        })
+      ) {
+        const teamResult = await client.query<{ count: number }>(
+          `select count(*)::int as count from "team" where "auction_id" = $1`,
+          [auctionId],
+        );
+        const teamCount = teamResult.rows[0]?.count ?? 0;
+        const capacity = teamCount * tierRow.min_per_team;
+
+        const assignedResult = await client.query<{ count: number }>(
+          `select count(*)::int as count
+             from "player_entry"
+            where "auction_id" = $1
+              and "tier_id" = $2
+              and "id" <> $3
+              and not "is_representative"`,
+          [auctionId, tierId, playerEntryId],
+        );
+        const assignedCount = assignedResult.rows[0]?.count ?? 0;
+
+        if (assignedCount >= capacity) {
+          await client.query("rollback");
+          throw new TierSetupError(
+            `This Tier has reached its exact capacity of ${capacity} player${capacity === 1 ? "" : "s"} (${tierRow.min_per_team} per Team).`,
+          );
+        }
+      }
     }
 
     const updated = await client.query(
@@ -309,3 +345,81 @@ export async function assignPlayerTier(
     client.release();
   }
 }
+
+/** Assigns multiple Player Entries to a Tier, or clears them when `tierId` is null. Returns false when it is not editable by this Organizer. */
+export async function assignMultiplePlayerTiers(
+  pool: Pool,
+  organizerId: string,
+  auctionId: string,
+  playerEntryIds: string[],
+  tierId: null | string,
+): Promise<boolean> {
+  if (playerEntryIds.length === 0) return true;
+
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    if (!(await lockEditableAuction(client, organizerId, auctionId))) {
+      await client.query("rollback");
+      return false;
+    }
+
+    if (tierId !== null) {
+      const tierRow = await loadTierRow(client, auctionId, tierId);
+      if (!tierRow) {
+        await client.query("rollback");
+        throw new TierSetupError("That Tier is not in this Auction.");
+      }
+
+      if (
+        isMustHaveTier({
+          maxPerTeam: tierRow.max_per_team,
+          minPerTeam: tierRow.min_per_team,
+        })
+      ) {
+        const teamResult = await client.query<{ count: number }>(
+          `select count(*)::int as count from "team" where "auction_id" = $1`,
+          [auctionId],
+        );
+        const teamCount = teamResult.rows[0]?.count ?? 0;
+        const capacity = teamCount * tierRow.min_per_team;
+
+        // Count how many players are in this tier currently, excluding those we are assigning (to prevent double counting)
+        const assignedResult = await client.query<{ count: number }>(
+          `select count(*)::int as count
+             from "player_entry"
+            where "auction_id" = $1
+              and "tier_id" = $2
+              and not ("id" = any($3))
+              and not "is_representative"`,
+          [auctionId, tierId, playerEntryIds],
+        );
+        const existingCount = assignedResult.rows[0]?.count ?? 0;
+
+        if (existingCount + playerEntryIds.length > capacity) {
+          const remainingSlots = Math.max(0, capacity - existingCount);
+          await client.query("rollback");
+          throw new TierSetupError(
+            `Cannot assign ${playerEntryIds.length} players to "${tierRow.label}". Only ${remainingSlots} slot${remainingSlots === 1 ? "" : "s"} remain (capacity is ${capacity} players, ${tierRow.min_per_team} per Team).`,
+          );
+        }
+      }
+    }
+
+    await client.query(
+      `update "player_entry"
+          set "tier_id" = $3, "updated_at" = now()
+        where "id" = any($1) and "auction_id" = $2`,
+      [playerEntryIds, auctionId, tierId],
+    );
+    await markAuctionDraft(client, auctionId);
+    await client.query("commit");
+    return true;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+

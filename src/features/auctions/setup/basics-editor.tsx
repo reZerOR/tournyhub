@@ -2,19 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+import { StationGroup, StationPlate } from "@/components/arena";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import type {
   AuctionBasicsInput,
@@ -26,11 +15,13 @@ import {
   CloseModeField,
   RulesModeField,
 } from "@/features/auctions/setup/basics-fields";
+import {
+  SaveReadout,
+  type SaveState,
+} from "@/features/auctions/setup/save-readout";
 import type { SerializedAuction } from "@/features/auctions/setup/serialize-auction";
 
 const AUTOSAVE_DELAY_MS = 600;
-
-type SaveState = "error" | "idle" | "saved" | "saving";
 
 export function BasicsEditor({ auction }: { auction: SerializedAuction }) {
   const [title, setTitle] = useState(auction.title);
@@ -87,17 +78,17 @@ export function BasicsEditor({ auction }: { auction: SerializedAuction }) {
   }, [auction.id]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle aria-level={2} role="heading">
-          Basics
-        </CardTitle>
-        <CardDescription>
-          The Auction&apos;s title, Game, Rules, and closing mode.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <FieldGroup>
+    <StationPlate
+      label="Basics"
+      stat={
+        <>
+          <span className="text-muted-foreground/70">autosaves</span>
+          <SaveReadout message={errorMessage} state={saveState} />
+        </>
+      }
+    >
+      <StationGroup label="Identity">
+        <div className="grid gap-5 sm:grid-cols-2">
           <Field data-invalid={!title.trim()}>
             <FieldLabel htmlFor="basics-title">Title</FieldLabel>
             <Input
@@ -120,20 +111,16 @@ export function BasicsEditor({ auction }: { auction: SerializedAuction }) {
             />
             {!game.trim() && <FieldError>Enter a Game.</FieldError>}
           </Field>
-          <RulesModeField onChange={setRulesMode} value={rulesMode} />
-          <CloseModeField onChange={setCloseMode} value={closeMode} />
-          <p
-            aria-live="polite"
-            className="text-sm text-muted-foreground"
-            role="status"
-          >
-            {saveState === "saving" && "Saving…"}
-            {saveState === "saved" && "Saved"}
-            {saveState === "error" &&
-              `Failed to save${errorMessage ? `: ${errorMessage}` : ""}`}
-          </p>
-        </FieldGroup>
-      </CardContent>
-    </Card>
+        </div>
+      </StationGroup>
+
+      <StationGroup label="Rules">
+        <RulesModeField onChange={setRulesMode} value={rulesMode} />
+      </StationGroup>
+
+      <StationGroup label="Close">
+        <CloseModeField onChange={setCloseMode} value={closeMode} />
+      </StationGroup>
+    </StationPlate>
   );
 }

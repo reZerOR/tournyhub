@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,14 @@ import {
 } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   addPlayersAction,
   cancelAuctionAction,
@@ -43,12 +51,36 @@ function RepresentativeRow({
   reason: string;
   team: ManageTeamView;
 }) {
-  const [email, setEmail] = useState(team.representative?.email ?? "");
+  const [email, setEmail] = useState(
+    team.representative?.email ?? team.invitation?.email ?? "",
+  );
   const [playerEntryId, setPlayerEntryId] = useState(
     team.playerEntry?.id ?? "",
   );
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<null | string>(null);
+
+  const availableEntries = useMemo(() => {
+    const list = [...entries];
+    if (
+      team.playerEntry &&
+      !list.some((entry) => entry.id === team.playerEntry!.id)
+    ) {
+      list.unshift(team.playerEntry);
+    }
+    return list;
+  }, [entries, team.playerEntry]);
+
+  const selectItems = useMemo(
+    () => [
+      { label: "Outside Representative", value: "" },
+      ...availableEntries.map((entry) => ({
+        label: entry.displayName,
+        value: entry.id,
+      })),
+    ],
+    [availableEntries],
+  );
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -75,7 +107,9 @@ function RepresentativeRow({
         <span className="text-sm text-muted-foreground">
           {team.representative
             ? `Representative: ${team.representative.name || team.representative.email}`
-            : "No representative yet."}
+            : team.invitation
+              ? `Invited: ${team.invitation.email}`
+              : "No representative yet."}
           {team.playerEntry
             ? ` · Player Representative: ${team.playerEntry.displayName}`
             : ""}
@@ -87,19 +121,36 @@ function RepresentativeRow({
           <FieldLabel htmlFor={`manage-entry-${team.id}`}>
             Player Entry (optional)
           </FieldLabel>
-          <select
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-            id={`manage-entry-${team.id}`}
-            onChange={(event) => setPlayerEntryId(event.target.value)}
+          <Select
+            items={selectItems}
+            onValueChange={(val) => setPlayerEntryId(val ?? "")}
             value={playerEntryId}
           >
-            <option value="">Outside Representative</option>
-            {entries.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.displayName}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-full" id={`manage-entry-${team.id}`}>
+              <SelectValue placeholder="Outside Representative">
+                {(val: string | null) => {
+                  if (!val) return "Outside Representative";
+                  const found = availableEntries.find((e) => e.id === val);
+                  return (
+                    found?.displayName ??
+                    (val === team.playerEntry?.id
+                      ? team.playerEntry.displayName
+                      : val)
+                  );
+                }}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="">Outside Representative</SelectItem>
+                {availableEntries.map((entry) => (
+                  <SelectItem key={entry.id} value={entry.id}>
+                    {entry.displayName}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </Field>
         <Field className="max-w-xs">
           <FieldLabel htmlFor={`manage-email-${team.id}`}>
@@ -267,7 +318,7 @@ export function ManageConsole({
               <RepresentativeRow
                 auctionId={auctionId}
                 entries={management.selectableEntries}
-                key={team.id}
+                key={`${team.id}:${team.representative?.email ?? ""}:${team.invitation?.email ?? ""}:${team.playerEntry?.id ?? ""}`}
                 onSaved={(next) => {
                   if (next) {
                     setManagement(next);
@@ -388,19 +439,37 @@ export function ManageConsole({
               {management.rulesMode === "tiered" && (
                 <Field className="max-w-xs">
                   <FieldLabel htmlFor="manage-player-tier">Tier</FieldLabel>
-                  <select
-                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-                    id="manage-player-tier"
-                    onChange={(event) => setTierId(event.target.value)}
+                  <Select
+                    items={[
+                      { label: "Choose an unopened Tier", value: "" },
+                      ...unopenedTiers.map((tier) => ({
+                        label: tier.label,
+                        value: tier.id,
+                      })),
+                    ]}
+                    onValueChange={(val) => setTierId(val ?? "")}
                     value={tierId}
                   >
-                    <option value="">Choose an unopened Tier</option>
-                    {unopenedTiers.map((tier) => (
-                      <option key={tier.id} value={tier.id}>
-                        {tier.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full" id="manage-player-tier">
+                      <SelectValue placeholder="Choose an unopened Tier">
+                        {(val: string | null) =>
+                          val
+                            ? (unopenedTiers.find((t) => t.id === val)?.label ?? val)
+                            : undefined
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="">Choose an unopened Tier</SelectItem>
+                        {unopenedTiers.map((tier) => (
+                          <SelectItem key={tier.id} value={tier.id}>
+                            {tier.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
                 </Field>
               )}
               <Button

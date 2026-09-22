@@ -267,8 +267,11 @@ export interface LiveTierProgress {
   id: string;
   isActive: boolean;
   label: string;
+  maxPerTeam: number;
+  minPerTeam: number;
   offeredCount: number;
   position: number;
+  startingPrice: number;
 }
 
 /** The open Unsold Round, if any. */
@@ -287,6 +290,7 @@ export interface LiveSale {
   saleId: string;
   source: "bid" | "forced";
   teamId: string;
+  tierId: null | string;
 }
 
 export interface LiveCallerPrivateState {

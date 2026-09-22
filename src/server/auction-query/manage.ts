@@ -9,6 +9,7 @@ export interface ManagePersonView {
 
 export interface ManageTeamView {
   id: string;
+  invitation: null | { email: string };
   name: null | string;
   /** The Player Entry currently preassigned as this Team's Player Representative. */
   playerEntry: null | { displayName: string; id: string };
@@ -197,21 +198,40 @@ export async function getAuctionManagementForOrganizer(
   ]);
   const organizerRow = organizerResult.rows[0];
 
-  const playerEntryByTeam = new Map<
-    string,
-    { displayName: string; id: string }
-  >();
-  for (const entry of entriesResult.rows) {
-    if (entry.is_representative && entry.team_id) {
-      playerEntryByTeam.set(entry.team_id, {
-        displayName: entry.display_name,
-        id: entry.id,
-      });
-    }
-  }
+  const playerRepResult = await db.query<{
+    display_name: string;
+    id: string;
+    team_id: string;
+  }>(
+    `select "id", "display_name", "team_id"
+       from "player_entry"
+      where "auction_id" = $1 and "is_representative" and "team_id" is not null`,
+    [auctionId],
+  );
+  const playerEntryByTeam = new Map(
+    playerRepResult.rows.map((row) => [
+      row.team_id,
+      { displayName: row.display_name, id: row.id },
+    ]),
+  );
+
+  const invitations = await db.query<{
+    invited_email: string;
+    team_id: string;
+  }>(
+    `select "team_id", "invited_email" from "team_invitation"
+      where "auction_id" = $1 and "status" = 'pending' and "expires_at" > now()`,
+    [auctionId],
+  );
+  const invitationByTeam = new Map(
+    invitations.rows.map((row) => [row.team_id, row.invited_email]),
+  );
 
   const teams: ManageTeamView[] = teamsResult.rows.map((team) => ({
     id: team.id,
+    invitation: invitationByTeam.has(team.id)
+      ? { email: invitationByTeam.get(team.id)! }
+      : null,
     name: team.name,
     playerEntry: playerEntryByTeam.get(team.id) ?? null,
     position: team.position,

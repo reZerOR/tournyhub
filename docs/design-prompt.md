@@ -76,23 +76,23 @@ Color **never** carries state alone — always pair with a label or icon.
 
 ### Account Settings Page — `/app/account`
 
-**Purpose**: User preferences, sessions, and Google account linking.
+**Purpose**: User profile, sessions, and Google account linking.
 
 **Visible fields** (pre-filled from server):
 - **Display name** (editable)
-- **Email** (read-only)
-- **Appearance**: Light / Dark toggle
-- **Sound enabled**: toggle (default off; controls live auction sounds)
+- **Verified email** (read-only)
 - **Sessions list**: each showing device/browser name (parsed from User-Agent), creation date, expiry date, IP address. Active session has a "Revoke" button. Revoking requires re-authentication ("fresh auth check").
 - **Google linking**: Shows "Link Google" button if not linked; "Unlink Google" if linked. OAuth errors display inline.
 
+There is no Preferences section. Appearance is permanently dark, and live sound remains controlled from the Live Auction console.
+
 **State management**:
-- Edits to name, appearance, sound trigger autosave or explicit save
+- Display-name edits use an explicit save action
 - Session revocation and Google linking/unlinking go through Better Auth
 - Reauthentication flow: request re-auth code → verify code → then perform destructive action
 - Shows success/error status messages after each operation
 
-**Layout**: Card-based sections on a max-width-2xl page.
+**Layout**: Three wide cards on a max-width-6xl page: Profile, Active sessions, and Connected accounts. Each card uses a compact descriptive rail on desktop and stacks on mobile. Reauthentication appears in a focused dialog instead of inline page content.
 
 ---
 

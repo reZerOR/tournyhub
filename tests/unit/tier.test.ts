@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  isMustHaveTier,
   normalizeTierLabel,
   sumTierMaximums,
   sumTierMinimums,
+  tierCapacity,
   tierInputSchema,
 } from "@/domain/tier";
 
@@ -80,3 +82,19 @@ describe("tier sums", () => {
     expect(sumTierMaximums(tiers)).toBe(6);
   });
 });
+
+describe("must-have tiers", () => {
+  it("identifies must-have tiers where min === max > 0", () => {
+    expect(isMustHaveTier({ maxPerTeam: 1, minPerTeam: 1 })).toBe(true);
+    expect(isMustHaveTier({ maxPerTeam: 2, minPerTeam: 2 })).toBe(true);
+    expect(isMustHaveTier({ maxPerTeam: 2, minPerTeam: 1 })).toBe(false);
+    expect(isMustHaveTier({ maxPerTeam: 0, minPerTeam: 0 })).toBe(false);
+  });
+
+  it("calculates exact player capacity based on team count", () => {
+    expect(tierCapacity({ maxPerTeam: 1, minPerTeam: 1 }, 3)).toBe(3);
+    expect(tierCapacity({ maxPerTeam: 2, minPerTeam: 2 }, 4)).toBe(8);
+    expect(tierCapacity({ maxPerTeam: 3, minPerTeam: 1 }, 3)).toBeNull();
+  });
+});
+

@@ -13,6 +13,14 @@ import {
 } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import type { LiveSnapshot } from "@/domain/live";
@@ -38,6 +46,7 @@ import {
   pauseAction,
   placeBidAction,
   requestMatchingAction,
+  resolveRemainingTierPlayerAction,
   resumeAction,
   returnPlayerAction,
   reverseSaleAction,
@@ -73,7 +82,13 @@ export function LiveConsole({
 }) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [eligible, setEligible] = useState<
-    { displayName: string; id: string }[] | null
+    | {
+        displayName: string;
+        id: string;
+        startingPrice: number;
+        tierId: null | string;
+      }[]
+    | null
   >(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
   const [returnReason, setReturnReason] = useState("");
@@ -210,7 +225,12 @@ export function LiveConsole({
     void loadEligiblePlayersAction(auctionId).then((players) => {
       if (players)
         setEligible(
-          players.map(({ displayName, id }) => ({ displayName, id })),
+          players.map(({ displayName, id, startingPrice, tierId }) => ({
+            displayName,
+            id,
+            startingPrice,
+            tierId,
+          })),
         );
     });
   }, [auctionId, role, snapshot.revision]);
@@ -415,6 +435,52 @@ export function LiveConsole({
 
   const unsoldRound = snapshot.unsoldRound;
 
+  const activeTier = snapshot.tiers.find((t) => t.id === snapshot.activeTierId);
+  const eligibleTeamsInTier = activeTier
+    ? snapshot.teams.filter(
+        (t) => (t.tierCounts[activeTier.id] ?? 0) < activeTier.maxPerTeam,
+      )
+    : [];
+  const unofferedInTier = (eligible ?? []).filter(
+    (p) => p.tierId === activeTier?.id,
+  );
+  const activePlayerInTier =
+    activePlayer && activePlayer.tierId === activeTier?.id ? activePlayer : null;
+
+  const remainingTierPlayer =
+    activePlayerInTier && unofferedInTier.length === 0
+      ? {
+          displayName: activePlayerInTier.displayName,
+          id: activePlayerInTier.playerEntryId,
+          startingPrice: activePlayerInTier.startingPrice,
+        }
+      : !activePlayerInTier && unofferedInTier.length === 1
+        ? unofferedInTier[0]!
+        : null;
+
+  const soleEligibleTeam =
+    eligibleTeamsInTier.length === 1 ? eligibleTeamsInTier[0]! : null;
+
+  const showRemainingResolution =
+    role === "organizer" &&
+    snapshot.rulesMode === "tiered" &&
+    !!activeTier &&
+    !activeTier.complete &&
+    !!remainingTierPlayer &&
+    !!soleEligibleTeam;
+
+  const tierSales = activeTier
+    ? snapshot.openSales.filter((s) => s.tierId === activeTier.id)
+    : [];
+  const tierAvgPrice =
+    tierSales.length > 0
+      ? Math.round(
+          tierSales.reduce((sum, s) => sum + s.amount, 0) / tierSales.length,
+        )
+      : (remainingTierPlayer?.startingPrice ?? activeTier?.startingPrice ?? 0);
+  const tierBasePrice =
+    remainingTierPlayer?.startingPrice ?? activeTier?.startingPrice ?? 0;
+
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -615,6 +681,72 @@ export function LiveConsole({
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
+            {showRemainingResolution && (
+              <div className="flex flex-col gap-3 rounded-lg border border-primary/40 bg-primary/5 p-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+                    Last Player in {activeTier.label}
+                  </span>
+                  <p className="text-sm font-medium">
+                    <span className="font-semibold">
+                      {remainingTierPlayer.displayName}
+                    </span>{" "}
+                    is the last Player in this Tier, and only{" "}
+                    <span className="font-semibold">
+                      {soleEligibleTeam.name ??
+                        `Team ${soleEligibleTeam.position + 1}`}
+                    </span>{" "}
+                    remains eligible.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Choose how to assign this Player to complete the Tier:
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    disabled={pending}
+                    onClick={() =>
+                      dispatch(
+                        resolveRemainingTierPlayerAction(auctionId, {
+                          expectedRevision: snapshot.revision,
+                          playerEntryId: remainingTierPlayer.id,
+                          pricing: "average",
+                          teamId: soleEligibleTeam.id,
+                          tierId: activeTier.id,
+                        }),
+                      )
+                    }
+                    type="button"
+                  >
+                    Sell at Average Price ({tierAvgPrice.toLocaleString()} cr)
+                  </Button>
+                  <Button
+                    disabled={pending}
+                    onClick={() =>
+                      dispatch(
+                        resolveRemainingTierPlayerAction(auctionId, {
+                          expectedRevision: snapshot.revision,
+                          playerEntryId: remainingTierPlayer.id,
+                          pricing: "base",
+                          teamId: soleEligibleTeam.id,
+                          tierId: activeTier.id,
+                        }),
+                      )
+                    }
+                    type="button"
+                    variant="secondary"
+                  >
+                    Sell at Base Price ({tierBasePrice.toLocaleString()} cr)
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {tierSales.length > 0
+                    ? `Average price is based on ${tierSales.length} previous sale${tierSales.length === 1 ? "" : "s"} in ${activeTier.label}.`
+                    : `No previous sales in ${activeTier.label}; average price defaults to base price.`}
+                </p>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-3">
               {snapshot.lifecycle === "live" ? (
                 <Button
@@ -680,19 +812,34 @@ export function LiveConsole({
             <div className="flex flex-wrap items-end gap-3 border-t pt-4">
               <Field className="min-w-48 flex-1">
                 <FieldLabel htmlFor="live-player">Next Player</FieldLabel>
-                <select
-                  className="w-full rounded-md border bg-transparent px-2 py-2 text-sm"
-                  id="live-player"
-                  onChange={(event) => setSelectedPlayerId(event.target.value)}
+                <Select
+                  items={(eligible ?? []).map((player) => ({
+                    label: player.displayName,
+                    value: player.id,
+                  }))}
+                  onValueChange={(val) => setSelectedPlayerId(val ?? "")}
                   value={selectedPlayerId}
                 >
-                  <option value="">Choose a Player</option>
-                  {(eligible ?? []).map((player) => (
-                    <option key={player.id} value={player.id}>
-                      {player.displayName}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full" id="live-player">
+                    <SelectValue placeholder="Choose a Player">
+                      {(val: string | null) =>
+                        val
+                          ? ((eligible ?? []).find((p) => p.id === val)?.displayName ??
+                            val)
+                          : undefined
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {(eligible ?? []).map((player) => (
+                        <SelectItem key={player.id} value={player.id}>
+                          {player.displayName}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </Field>
               <Button
                 disabled={pending || !selectedPlayerId || !!activePlayer}
@@ -1002,20 +1149,37 @@ export function LiveConsole({
             <div className="flex flex-wrap items-end gap-3 border-t pt-4">
               <Field className="min-w-48 flex-1">
                 <FieldLabel htmlFor="reverse-sale">Sale to reverse</FieldLabel>
-                <select
-                  className="w-full rounded-md border bg-transparent px-2 py-2 text-sm"
-                  id="reverse-sale"
-                  onChange={(event) => setSaleIdToReverse(event.target.value)}
+                <Select
+                  items={snapshot.openSales.map((sale) => ({
+                    label: `${sale.playerDisplayName} · ${sale.amount}${sale.source === "forced" ? " (Forced)" : ""}`,
+                    value: sale.saleId,
+                  }))}
+                  onValueChange={(val) => setSaleIdToReverse(val ?? "")}
                   value={saleIdToReverse}
                 >
-                  <option value="">Choose a Sale</option>
-                  {snapshot.openSales.map((sale) => (
-                    <option key={sale.saleId} value={sale.saleId}>
-                      {sale.playerDisplayName} · {sale.amount}
-                      {sale.source === "forced" ? " (Forced)" : ""}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full" id="reverse-sale">
+                    <SelectValue placeholder="Choose a Sale">
+                      {(val: string | null) => {
+                        const sale = snapshot.openSales.find(
+                          (s) => s.saleId === val,
+                        );
+                        return sale
+                          ? `${sale.playerDisplayName} · ${sale.amount}${sale.source === "forced" ? " (Forced)" : ""}`
+                          : (val ?? undefined);
+                      }}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {snapshot.openSales.map((sale) => (
+                        <SelectItem key={sale.saleId} value={sale.saleId}>
+                          {sale.playerDisplayName} · {sale.amount}
+                          {sale.source === "forced" ? " (Forced)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </Field>
               <Button
                 disabled={

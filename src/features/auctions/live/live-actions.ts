@@ -32,6 +32,7 @@ import {
   requestConstrainedMatching,
   startUnsoldRound,
 } from "@/server/auction-command/tier-progress";
+import { resolveRemainingTierPlayer } from "@/server/auction-command/tier-resolution";
 import { getLiveSnapshot } from "@/server/auction-query/live-snapshot";
 import { loadOpenUnsoldRound } from "@/server/auction-query/progress";
 import { getCurrentSession } from "@/server/auth/session";
@@ -444,4 +445,37 @@ export async function reverseSaleAction(
     saleId: input.saleId,
   });
   return settle(auctionId, session.user.id, outcome, "Sale reversed.");
+}
+
+export async function resolveRemainingTierPlayerAction(
+  auctionId: string,
+  input: {
+    expectedRevision: number;
+    playerEntryId: string;
+    pricing: "average" | "base";
+    teamId: string;
+    tierId: string;
+  },
+): Promise<LiveActionPayload> {
+  const session = await getCurrentSession();
+  if (!session) return { outcome: { status: "unauthorized" }, snapshot: null };
+
+  const outcome = await resolveRemainingTierPlayer(getPool(), {
+    actorUserId: session.user.id,
+    auctionId,
+    commandId: randomUUID(),
+    expectedRevision: input.expectedRevision,
+    playerEntryId: input.playerEntryId,
+    pricing: input.pricing,
+    teamId: input.teamId,
+    tierId: input.tierId,
+  });
+  return settle(
+    auctionId,
+    session.user.id,
+    outcome,
+    outcome.status === "accepted"
+      ? `Sold for ${outcome.result.amount.toLocaleString()} Credits.`
+      : undefined,
+  );
 }

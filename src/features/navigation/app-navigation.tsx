@@ -1,31 +1,39 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   CircleHelp,
-  Gavel,
   LayoutDashboard,
-  Menu,
   Plus,
   ShieldCheck,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { cn } from "cn";
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+  useSidebar,
+} from "@/components/ui/sidebar";
+
+export interface AppSidebarUser {
+  email?: string | null;
+  image?: string | null;
+  name?: string | null;
+}
 
 interface NavigationItem {
   exact?: boolean;
@@ -49,7 +57,7 @@ const primaryItems: NavigationItem[] = [
   },
 ];
 
-const accountItems: NavigationItem[] = [
+const workspaceItems: NavigationItem[] = [
   {
     href: "/app/account",
     icon: UserRound,
@@ -67,149 +75,170 @@ function isItemActive(pathname: string, item: NavigationItem): boolean {
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
-function NavigationLinks({
+function getInitials(name?: string | null, email?: string | null): string {
+  if (name) {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length > 0) {
+      return parts
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase();
+    }
+  }
+  if (email) {
+    return email.slice(0, 2).toUpperCase();
+  }
+  return "U";
+}
+
+export function AppSidebar({
   administrator,
-  onNavigate,
+  user,
 }: {
   administrator: boolean;
-  onNavigate?: () => void;
+  user?: AppSidebarUser;
 }) {
   const pathname = usePathname();
-  const workspaceItems = administrator
+  const { setOpenMobile } = useSidebar();
+
+  const allWorkspaceItems = administrator
     ? [
-        ...accountItems,
+        ...workspaceItems,
         {
           href: "/app/admin",
           icon: ShieldCheck,
           label: "Administration",
         },
       ]
-    : accountItems;
+    : workspaceItems;
 
-  function renderItems(items: NavigationItem[]) {
-    return items.map((item) => {
-      const active = isItemActive(pathname, item);
-      const Icon = item.icon;
+  const userLabel = user?.name || user?.email || "User";
+  const userInitials = getInitials(user?.name, user?.email);
 
-      return (
+  return (
+    <Sidebar
+      className="app-shell-sidebar border-sidebar-border"
+      collapsible="icon"
+    >
+      <SidebarHeader className="h-16 justify-center border-b border-sidebar-border px-3">
         <Link
-          aria-current={active ? "page" : undefined}
-          className={cn(
-            "flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            active &&
-              "bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-sidebar-border",
-          )}
-          href={item.href}
-          key={item.href}
-          onClick={onNavigate}
+          className="flex items-center gap-3 overflow-hidden rounded-lg px-1 py-1 text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          href="/app"
+          onClick={() => setOpenMobile(false)}
         >
-          <Icon aria-hidden className="size-5" strokeWidth={1.75} />
-          {item.label}
-        </Link>
-      );
-    });
-  }
-
-  return (
-    <nav aria-label="Primary navigation" className="flex flex-col gap-7">
-      <div className="flex flex-col gap-1">{renderItems(primaryItems)}</div>
-      <div className="flex flex-col gap-2">
-        <p className="px-3 text-xs font-medium tracking-wider text-sidebar-foreground/45 uppercase">
-          Workspace
-        </p>
-        <div className="flex flex-col gap-1">{renderItems(workspaceItems)}</div>
-      </div>
-    </nav>
-  );
-}
-
-export function AppNavigation({
-  administrator,
-  onNavigate,
-}: {
-  administrator: boolean;
-  onNavigate?: () => void;
-}) {
-  return (
-    <div className="relative flex h-full flex-col px-4 py-5">
-      <Link
-        className="mb-10 flex items-center gap-3 rounded-lg px-2 py-1 text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-        href="/app"
-        onClick={onNavigate}
-      >
-        <Image
-          alt=""
-          className="size-9"
-          height={36}
-          src="/tournyhub_icon.svg"
-          width={36}
-        />
-        <span className="font-heading text-xl font-semibold tracking-tight">
-          Tourny<span className="text-neon">Hub</span>
-        </span>
-        <Badge
-          className="ml-auto border-sidebar-border text-sidebar-foreground/65"
-          variant="outline"
-        >
-          Beta
-        </Badge>
-      </Link>
-
-      <NavigationLinks administrator={administrator} onNavigate={onNavigate} />
-
-      <div className="mt-auto border-t border-sidebar-border px-2 pt-6">
-        <Gavel
-          aria-hidden
-          className="mb-4 size-8 text-neon"
-          strokeWidth={1.5}
-        />
-        <p className="max-w-44 font-heading text-lg leading-tight font-semibold text-sidebar-foreground">
-          Fair Auctions build great Teams.
-        </p>
-        <p className="mt-3 text-xs leading-relaxed text-sidebar-foreground/55">
-          Run Auctions. Build Teams. Keep it fair.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-export function MobileAppNavigation({
-  administrator,
-}: {
-  administrator: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <Sheet onOpenChange={setOpen} open={open}>
-      <SheetTrigger
-        render={
-          <Button
-            aria-label="Open navigation"
-            size="icon"
-            type="button"
-            variant="ghost"
+          <Image
+            alt=""
+            className="size-8 shrink-0"
+            height={32}
+            src="/tournyhub_icon.svg"
+            width={32}
           />
-        }
-      >
-        <Menu />
-      </SheetTrigger>
-      <SheetContent
-        className="app-shell-sidebar w-[18rem] border-sidebar-border p-0 text-sidebar-foreground"
-        side="left"
-      >
-        <SheetHeader className="sr-only">
-          <SheetTitle>TournyHub navigation</SheetTitle>
-          <SheetDescription>
-            Move between the Dashboard, account, and Auction tools.
-          </SheetDescription>
-        </SheetHeader>
-        <AppNavigation
-          administrator={administrator}
-          onNavigate={() => setOpen(false)}
-        />
-      </SheetContent>
-    </Sheet>
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-2 group-data-[collapsible=icon]:hidden">
+            <span className="font-heading text-lg font-semibold tracking-tight">
+              Tourny<span className="text-neon">Hub</span>
+            </span>
+            <Badge
+              className="border-sidebar-border text-sidebar-foreground/65"
+              variant="outline"
+            >
+              Beta
+            </Badge>
+          </div>
+        </Link>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarMenu>
+            {primaryItems.map((item) => {
+              const active = isItemActive(pathname, item);
+              const Icon = item.icon;
+              return (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    isActive={active}
+                    render={
+                      <Link
+                        href={item.href}
+                        onClick={() => setOpenMobile(false)}
+                      />
+                    }
+                    tooltip={item.label}
+                  >
+                    <Icon />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {allWorkspaceItems.map((item) => {
+                const active = isItemActive(pathname, item);
+                const Icon = item.icon;
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      isActive={active}
+                      render={
+                        <Link
+                          href={item.href}
+                          onClick={() => setOpenMobile(false)}
+                        />
+                      }
+                      tooltip={item.label}
+                    >
+                      <Icon />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border p-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              className="h-12 data-[state=open]:bg-sidebar-accent"
+              render={
+                <Link
+                  href="/app/account"
+                  onClick={() => setOpenMobile(false)}
+                />
+              }
+              size="lg"
+              tooltip={userLabel}
+            >
+              <Avatar size="sm">
+                {user?.image && <AvatarImage alt={userLabel} src={user.image} />}
+                <AvatarFallback>{userInitials}</AvatarFallback>
+              </Avatar>
+              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                <span className="truncate font-medium">{userLabel}</span>
+                {user?.email && user.email !== userLabel && (
+                  <span className="truncate text-xs text-muted-foreground">
+                    {user.email}
+                  </span>
+                )}
+              </div>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+
+      <SidebarRail />
+    </Sidebar>
   );
 }
+
+export { AppSidebar as AppNavigation };

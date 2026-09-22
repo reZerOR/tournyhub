@@ -1,17 +1,20 @@
 "use client";
 
 import { type FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil, Plus, Trash } from "lucide-react";
 
+import { StationGroup, StationPlate } from "@/components/arena";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Field,
   FieldError,
@@ -35,6 +38,11 @@ import {
   updatePlayerEntryAction,
 } from "@/features/auctions/setup/player-actions";
 import { PlayerImport } from "@/features/auctions/setup/player-import";
+import { PlayerTable } from "@/features/auctions/setup/player-table";
+import {
+  SaveReadout,
+  type SaveState,
+} from "@/features/auctions/setup/save-readout";
 import type {
   SerializedCustomPlayerField,
   SerializedPlayerEntry,
@@ -109,107 +117,120 @@ function PlayerFields({
 }) {
   return (
     <FieldGroup>
-      <Field data-invalid={!values.displayName.trim()}>
-        <FieldLabel htmlFor={`${idPrefix}-display-name`}>
-          Display name
-        </FieldLabel>
-        <Input
-          aria-invalid={!values.displayName.trim()}
-          id={`${idPrefix}-display-name`}
-          maxLength={PLAYER_ENTRY_LIMITS.displayName}
-          onChange={(event) =>
-            onChange((previous) => ({
-              ...previous,
-              displayName: event.target.value,
-            }))
-          }
-          value={values.displayName}
-        />
-        {!values.displayName.trim() && (
-          <FieldError>Display name is required.</FieldError>
-        )}
-      </Field>
-      <Field>
-        <FieldLabel htmlFor={`${idPrefix}-role`}>Role</FieldLabel>
-        <Input
-          id={`${idPrefix}-role`}
-          maxLength={PLAYER_ENTRY_LIMITS.role}
-          onChange={(event) =>
-            onChange((previous) => ({ ...previous, role: event.target.value }))
-          }
-          value={values.role}
-        />
-      </Field>
-      <Field>
-        <FieldLabel htmlFor={`${idPrefix}-external-player-id`}>
-          External Player ID
-        </FieldLabel>
-        <Input
-          id={`${idPrefix}-external-player-id`}
-          maxLength={PLAYER_ENTRY_LIMITS.externalPlayerId}
-          onChange={(event) =>
-            onChange((previous) => ({
-              ...previous,
-              externalPlayerId: event.target.value,
-            }))
-          }
-          value={values.externalPlayerId}
-        />
-      </Field>
-      <Field>
-        <FieldLabel htmlFor={`${idPrefix}-phone-number`}>
-          Phone number
-        </FieldLabel>
-        <Input
-          id={`${idPrefix}-phone-number`}
-          maxLength={PLAYER_ENTRY_LIMITS.phoneNumber}
-          onChange={(event) =>
-            onChange((previous) => ({
-              ...previous,
-              phoneNumber: event.target.value,
-            }))
-          }
-          value={values.phoneNumber}
-        />
-      </Field>
-      <Field>
-        <FieldLabel htmlFor={`${idPrefix}-starting-price`}>
-          Starting price
-        </FieldLabel>
-        <Input
-          id={`${idPrefix}-starting-price`}
-          inputMode="numeric"
-          maxLength={String(PLAYER_ENTRY_LIMITS.startingPriceMax).length}
-          onChange={(event) =>
-            onChange((previous) => ({
-              ...previous,
-              startingPriceOverride: event.target.value,
-            }))
-          }
-          value={values.startingPriceOverride}
-        />
-      </Field>
-      {customFields.map((field) => (
-        <Field key={field.id}>
-          <FieldLabel htmlFor={`${idPrefix}-custom-${field.id}`}>
-            {field.label}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field data-invalid={!values.displayName.trim()}>
+          <FieldLabel htmlFor={`${idPrefix}-display-name`}>
+            Display name *
           </FieldLabel>
           <Input
-            id={`${idPrefix}-custom-${field.id}`}
-            maxLength={PLAYER_ENTRY_LIMITS.customFieldValue}
+            aria-invalid={!values.displayName.trim()}
+            id={`${idPrefix}-display-name`}
+            maxLength={PLAYER_ENTRY_LIMITS.displayName}
             onChange={(event) =>
               onChange((previous) => ({
                 ...previous,
-                customValues: {
-                  ...previous.customValues,
-                  [field.id]: event.target.value,
-                },
+                displayName: event.target.value,
               }))
             }
-            value={values.customValues[field.id] ?? ""}
+            placeholder="e.g. John Doe"
+            value={values.displayName}
+          />
+          {!values.displayName.trim() && (
+            <FieldError>Display name is required.</FieldError>
+          )}
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-role`}>Role</FieldLabel>
+          <Input
+            id={`${idPrefix}-role`}
+            maxLength={PLAYER_ENTRY_LIMITS.role}
+            onChange={(event) =>
+              onChange((previous) => ({
+                ...previous,
+                role: event.target.value,
+              }))
+            }
+            placeholder="e.g. Forward, Midlaner"
+            value={values.role}
           />
         </Field>
-      ))}
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-external-player-id`}>
+            External Player ID
+          </FieldLabel>
+          <Input
+            className="font-mono"
+            id={`${idPrefix}-external-player-id`}
+            maxLength={PLAYER_ENTRY_LIMITS.externalPlayerId}
+            onChange={(event) =>
+              onChange((previous) => ({
+                ...previous,
+                externalPlayerId: event.target.value,
+              }))
+            }
+            placeholder="e.g. PLY-101"
+            value={values.externalPlayerId}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-phone-number`}>
+            Phone number
+          </FieldLabel>
+          <Input
+            className="font-mono"
+            id={`${idPrefix}-phone-number`}
+            maxLength={PLAYER_ENTRY_LIMITS.phoneNumber}
+            onChange={(event) =>
+              onChange((previous) => ({
+                ...previous,
+                phoneNumber: event.target.value,
+              }))
+            }
+            placeholder="e.g. +1 555-0100"
+            value={values.phoneNumber}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-starting-price`}>
+            Starting price
+          </FieldLabel>
+          <Input
+            className="font-mono tabular-nums"
+            id={`${idPrefix}-starting-price`}
+            inputMode="numeric"
+            maxLength={String(PLAYER_ENTRY_LIMITS.startingPriceMax).length}
+            onChange={(event) =>
+              onChange((previous) => ({
+                ...previous,
+                startingPriceOverride: event.target.value,
+              }))
+            }
+            placeholder="e.g. 100"
+            value={values.startingPriceOverride}
+          />
+        </Field>
+        {customFields.map((field) => (
+          <Field key={field.id}>
+            <FieldLabel htmlFor={`${idPrefix}-custom-${field.id}`}>
+              {field.label}
+            </FieldLabel>
+            <Input
+              id={`${idPrefix}-custom-${field.id}`}
+              maxLength={PLAYER_ENTRY_LIMITS.customFieldValue}
+              onChange={(event) =>
+                onChange((previous) => ({
+                  ...previous,
+                  customValues: {
+                    ...previous.customValues,
+                    [field.id]: event.target.value,
+                  },
+                }))
+              }
+              value={values.customValues[field.id] ?? ""}
+            />
+          </Field>
+        ))}
+      </div>
     </FieldGroup>
   );
 }
@@ -225,15 +246,22 @@ export function PlayersEditor({
 }) {
   const [customFields, setCustomFields] = useState(initialCustomFields);
   const [entries, setEntries] = useState(initialEntries);
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<null | string>(null);
-  const [hasSaved, setHasSaved] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
 
+  // Custom field management
   const [newFieldLabel, setNewFieldLabel] = useState("");
   const [editingFieldId, setEditingFieldId] = useState<null | string>(null);
   const [editingFieldLabel, setEditingFieldLabel] = useState("");
 
+  // Modals state
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newPlayer, setNewPlayer] = useState<PlayerFormValues>(EMPTY_PLAYER);
+  const [addPlayerError, setAddPlayerError] = useState<null | string>(null);
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<null | string>(null);
   const [editingEntry, setEditingEntry] = useState<null | PlayerFormValues>(
     null,
@@ -261,17 +289,18 @@ export function PlayersEditor({
 
   function reportSaved() {
     setErrorMessage(null);
-    setHasSaved(true);
+    setSaveState("saved");
   }
 
   function reportError(message: string) {
-    setHasSaved(false);
+    setSaveState("error");
     setErrorMessage(message);
   }
 
   async function addCustomField(event: FormEvent) {
     event.preventDefault();
     setPending(true);
+    setSaveState("saving");
     const result = await createCustomPlayerFieldAction(auctionId, {
       label: newFieldLabel,
     });
@@ -291,6 +320,7 @@ export function PlayersEditor({
   ) {
     event.preventDefault();
     setPending(true);
+    setSaveState("saving");
     const result = await updateCustomPlayerFieldAction(
       auctionId,
       customPlayerFieldId,
@@ -312,6 +342,7 @@ export function PlayersEditor({
 
   async function removeCustomField(customPlayerFieldId: string) {
     setPending(true);
+    setSaveState("saving");
     const result = await deleteCustomPlayerFieldAction(
       auctionId,
       customPlayerFieldId,
@@ -340,24 +371,45 @@ export function PlayersEditor({
     }
   }
 
-  async function addPlayer(event: FormEvent) {
+  async function handleAddPlayer(event: FormEvent) {
     event.preventDefault();
+    if (!newPlayer.displayName.trim()) {
+      setAddPlayerError("Display name is required.");
+      return;
+    }
     setPending(true);
+    setSaveState("saving");
+    setAddPlayerError(null);
     const result = await createPlayerEntryAction(auctionId, toInput(newPlayer));
     setPending(false);
     if (result.status === "saved") {
       setEntries((previous) => [...previous, result.entry]);
       setNewPlayer(EMPTY_PLAYER);
+      setIsAddModalOpen(false);
       reportSaved();
     } else {
+      setAddPlayerError(result.message);
       reportError(result.message);
     }
   }
 
-  async function savePlayer(event: FormEvent) {
+  function openEditModal(entry: SerializedPlayerEntry) {
+    setEditingEntryId(entry.id);
+    setEditingEntry(toFormValues(entry));
+    setEditingEntryError(null);
+    setIsEditModalOpen(true);
+  }
+
+  async function handleSavePlayer(event: FormEvent) {
     event.preventDefault();
     if (!editingEntry || !editingEntryId) return;
+    if (!editingEntry.displayName.trim()) {
+      setEditingEntryError("Display name is required.");
+      return;
+    }
     setPending(true);
+    setSaveState("saving");
+    setEditingEntryError(null);
     const result = await updatePlayerEntryAction(
       auctionId,
       editingEntryId,
@@ -370,17 +422,19 @@ export function PlayersEditor({
           entry.id === editingEntryId ? result.entry : entry,
         ),
       );
+      setIsEditModalOpen(false);
       setEditingEntryId(null);
       setEditingEntry(null);
-      setEditingEntryError(null);
       reportSaved();
     } else {
+      setSaveState("error");
       setEditingEntryError(result.message);
     }
   }
 
   async function removePlayer(playerEntryId: string) {
     setPending(true);
+    setSaveState("saving");
     const result = await deletePlayerEntryAction(auctionId, playerEntryId);
     setPending(false);
     if (result.status === "saved") {
@@ -388,6 +442,7 @@ export function PlayersEditor({
         previous.filter((entry) => entry.id !== playerEntryId),
       );
       if (editingEntryId === playerEntryId) {
+        setIsEditModalOpen(false);
         setEditingEntryId(null);
         setEditingEntry(null);
       }
@@ -402,151 +457,214 @@ export function PlayersEditor({
     if (!snapshot) return;
     setCustomFields(snapshot.customFields);
     setEntries(snapshot.entries);
+    router.refresh();
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle aria-level={2} role="heading">
-            Players
-          </CardTitle>
-          <CardDescription>
-            Add Player Entries with a display name. Every other detail is
-            optional and stays with this Auction.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
-          <section className="flex flex-col gap-3">
-            <h3 className="text-sm font-medium">Custom Player Fields</h3>
-            {customFields.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No Custom Player Fields yet. Add one to capture game-specific
-                details.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {customFields.map((field) =>
-                  editingFieldId === field.id ? (
-                    <li key={field.id}>
-                      <form
-                        className="flex items-center gap-2"
-                        onSubmit={(event) => renameCustomField(event, field.id)}
-                      >
-                        <Input
-                          aria-label={`Label for ${field.label}`}
-                          maxLength={PLAYER_ENTRY_LIMITS.customFieldLabel}
-                          onChange={(event) =>
-                            setEditingFieldLabel(event.target.value)
-                          }
-                          value={editingFieldLabel}
-                        />
-                        <Button disabled={pending} size="sm" type="submit">
-                          Save field
-                        </Button>
-                        <Button
-                          onClick={() => setEditingFieldId(null)}
-                          size="sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          Cancel
-                        </Button>
-                      </form>
-                    </li>
-                  ) : (
-                    <li
-                      className="flex items-center justify-between gap-2"
-                      key={field.id}
+    <div className="flex flex-col gap-5">
+      <StationPlate
+        label="Players"
+        stat={
+          <>
+            <span className="text-muted-foreground/70">
+              {entries.length} of{" "}
+              {PLAYER_ENTRY_LIMITS.maxEntriesPerAuction.toLocaleString()}
+            </span>
+            <SaveReadout message={errorMessage} state={saveState} />
+          </>
+        }
+      >
+        <StationGroup
+          hint={
+            duplicateNames.size > 0
+              ? `${duplicateNames.size} duplicate ${
+                  duplicateNames.size === 1 ? "name" : "names"
+                }`
+              : "no duplicate names"
+          }
+          label="Roster"
+        >
+          {duplicateNames.size > 0 && (
+            <Alert variant="warning">
+              <AlertTitle>Duplicate display names</AlertTitle>
+              <AlertDescription>
+                These names appear more than once. They are saved, but check
+                that they are different Players: {duplicateLabels}.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <PlayerTable
+            customFields={customFields}
+            duplicateNames={duplicateNames}
+            entries={entries}
+            onAddClick={() => {
+              setNewPlayer(EMPTY_PLAYER);
+              setAddPlayerError(null);
+              setIsAddModalOpen(true);
+            }}
+            onEditClick={openEditModal}
+            onRemoveClick={removePlayer}
+            pending={pending}
+          />
+        </StationGroup>
+
+        <StationGroup
+          hint={`max ${PLAYER_ENTRY_LIMITS.maxCustomFieldsPerAuction}`}
+          label="Custom Player Fields"
+        >
+          {customFields.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No Custom Player Fields yet. Add one to capture game-specific
+              details.
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border/60">
+              {customFields.map((field) =>
+                editingFieldId === field.id ? (
+                  <li className="py-2 first:pt-0" key={field.id}>
+                    <form
+                      className="flex items-center gap-2"
+                      onSubmit={(event) => renameCustomField(event, field.id)}
                     >
-                      <span>{field.label}</span>
-                      <div className="flex gap-1">
-                        <Button
-                          onClick={() => {
-                            setEditingFieldId(field.id);
-                            setEditingFieldLabel(field.label);
-                          }}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          Rename field
-                        </Button>
-                        <Button
-                          onClick={() => removeCustomField(field.id)}
-                          size="sm"
-                          type="button"
-                          variant="destructive"
-                        >
-                          Remove field
-                        </Button>
-                      </div>
-                    </li>
-                  ),
-                )}
-              </ul>
-            )}
-            <form className="flex items-end gap-2" onSubmit={addCustomField}>
-              <Field className="max-w-xs">
-                <FieldLabel htmlFor="new-custom-field">Field label</FieldLabel>
-                <Input
-                  id="new-custom-field"
-                  maxLength={PLAYER_ENTRY_LIMITS.customFieldLabel}
-                  onChange={(event) => setNewFieldLabel(event.target.value)}
-                  value={newFieldLabel}
-                />
-              </Field>
-              <Button disabled={pending} size="sm" type="submit">
-                Add field
-              </Button>
-            </form>
-          </section>
+                      <Input
+                        aria-label={`Label for ${field.label}`}
+                        className="max-w-xs"
+                        maxLength={PLAYER_ENTRY_LIMITS.customFieldLabel}
+                        onChange={(event) =>
+                          setEditingFieldLabel(event.target.value)
+                        }
+                        value={editingFieldLabel}
+                      />
+                      <Button disabled={pending} size="sm" type="submit">
+                        Save field
+                      </Button>
+                      <Button
+                        onClick={() => setEditingFieldId(null)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        Cancel
+                      </Button>
+                    </form>
+                  </li>
+                ) : (
+                  <li
+                    className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
+                    key={field.id}
+                  >
+                    <span className="text-sm">{field.label}</span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        aria-label={`Rename ${field.label} field`}
+                        onClick={() => {
+                          setEditingFieldId(field.id);
+                          setEditingFieldLabel(field.label);
+                        }}
+                        size="icon-sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Pencil aria-hidden className="size-4" />
+                      </Button>
+                      <Button
+                        aria-label={`Remove ${field.label} field`}
+                        onClick={() => removeCustomField(field.id)}
+                        size="icon-sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash aria-hidden className="size-4" />
+                      </Button>
+                    </div>
+                  </li>
+                ),
+              )}
+            </ul>
+          )}
 
-          <section className="flex flex-col gap-3">
-            <h3 className="text-sm font-medium">Add a Player Entry</h3>
-            <form onSubmit={addPlayer}>
-              <PlayerFields
-                customFields={customFields}
-                idPrefix="new-player"
-                onChange={setNewPlayer}
-                values={newPlayer}
+          <form className="flex items-end gap-2" onSubmit={addCustomField}>
+            <Field className="max-w-xs">
+              <FieldLabel htmlFor="new-custom-field">Field label</FieldLabel>
+              <Input
+                id="new-custom-field"
+                maxLength={PLAYER_ENTRY_LIMITS.customFieldLabel}
+                onChange={(event) => setNewFieldLabel(event.target.value)}
+                value={newFieldLabel}
               />
-              <div className="mt-4">
-                <Button disabled={pending} type="submit">
-                  Add Player
-                </Button>
-              </div>
-            </form>
-          </section>
+            </Field>
+            <Button disabled={pending} size="sm" type="submit">
+              <Plus aria-hidden className="size-4" />
+              Add field
+            </Button>
+          </form>
+        </StationGroup>
+      </StationPlate>
 
-          <p
-            aria-live="polite"
-            className="text-sm text-muted-foreground"
-            role="status"
-          >
-            {pending
-              ? "Saving…"
-              : errorMessage
-                ? `Failed to save: ${errorMessage}`
-                : hasSaved
-                  ? "Saved"
-                  : ""}
-          </p>
-        </CardContent>
-      </Card>
+      {/* Add Player Modal */}
+      <Dialog onOpenChange={setIsAddModalOpen} open={isAddModalOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Player Entry</DialogTitle>
+            <DialogDescription>
+              Enter the details for a new player in this auction roster.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddPlayer}>
+            <PlayerFields
+              customFields={customFields}
+              idPrefix="new-player-modal"
+              onChange={setNewPlayer}
+              values={newPlayer}
+            />
+            {addPlayerError && (
+              <Alert className="mt-4" variant="destructive">
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{addPlayerError}</AlertDescription>
+              </Alert>
+            )}
+            <DialogFooter className="mt-6">
+              <Button
+                onClick={() => setIsAddModalOpen(false)}
+                type="button"
+                variant="outline"
+              >
+                Cancel
+              </Button>
+              <Button disabled={pending} type="submit">
+                {pending ? "Adding..." : "Add Player"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {editingEntry && editingEntryId && (
-        <Card>
-          <CardHeader>
-            <CardTitle aria-level={2} role="heading">
-              Edit Player Entry
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={savePlayer}>
+      {/* Edit Player Modal */}
+      <Dialog
+        onOpenChange={(open) => {
+          setIsEditModalOpen(open);
+          if (!open) {
+            setEditingEntryId(null);
+            setEditingEntry(null);
+            setEditingEntryError(null);
+          }
+        }}
+        open={isEditModalOpen}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Player Entry</DialogTitle>
+            <DialogDescription>
+              Update details for{" "}
+              {editingEntry?.displayName || "this player entry"}.
+            </DialogDescription>
+          </DialogHeader>
+          {editingEntry && (
+            <form onSubmit={handleSavePlayer}>
               <PlayerFields
                 customFields={customFields}
-                idPrefix="edit-player"
+                idPrefix="edit-player-modal"
                 onChange={(update) =>
                   setEditingEntry((previous) =>
                     previous ? update(previous) : previous,
@@ -555,151 +673,27 @@ export function PlayersEditor({
                 values={editingEntry}
               />
               {editingEntryError && (
-                <FieldError>{editingEntryError}</FieldError>
+                <Alert className="mt-4" variant="destructive">
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{editingEntryError}</AlertDescription>
+                </Alert>
               )}
-              <div className="mt-4 flex gap-2">
-                <Button disabled={pending} type="submit">
-                  Save Player
-                </Button>
+              <DialogFooter className="mt-6">
                 <Button
-                  onClick={() => {
-                    setEditingEntryId(null);
-                    setEditingEntry(null);
-                    setEditingEntryError(null);
-                  }}
+                  onClick={() => setIsEditModalOpen(false)}
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                 >
                   Cancel
                 </Button>
-              </div>
+                <Button disabled={pending} type="submit">
+                  {pending ? "Saving..." : "Save Changes"}
+                </Button>
+              </DialogFooter>
             </form>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle aria-level={2} role="heading">
-            Player Entries
-          </CardTitle>
-          <CardDescription>
-            {entries.length} of{" "}
-            {PLAYER_ENTRY_LIMITS.maxEntriesPerAuction.toLocaleString()} Player
-            Entries.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {duplicateNames.size > 0 && (
-            <Alert>
-              <AlertTitle>Duplicate display names</AlertTitle>
-              <AlertDescription>
-                These names appear more than once. They are saved, but check
-                that they are different Players: {duplicateLabels}.
-              </AlertDescription>
-            </Alert>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <caption className="sr-only">Player Entries</caption>
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium" scope="col">
-                    Name
-                  </th>
-                  <th className="py-2 pr-3 font-medium" scope="col">
-                    Role
-                  </th>
-                  <th className="py-2 pr-3 font-medium" scope="col">
-                    External Player ID
-                  </th>
-                  <th className="py-2 pr-3 font-medium" scope="col">
-                    Starting price
-                  </th>
-                  <th className="py-2 pr-3 font-medium" scope="col">
-                    Custom values
-                  </th>
-                  <th className="py-2 font-medium" scope="col">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.length === 0 && (
-                  <tr>
-                    <td className="py-3 text-muted-foreground" colSpan={6}>
-                      You haven&apos;t added any Player Entries yet.
-                    </td>
-                  </tr>
-                )}
-                {entries.map((entry) => (
-                  <tr
-                    className="border-b align-top last:border-0"
-                    key={entry.id}
-                  >
-                    <td className="py-2 pr-3">
-                      <div className="flex items-center gap-2">
-                        <span>{entry.displayName}</span>
-                        {duplicateNames.has(
-                          normalizeDisplayName(entry.displayName),
-                        ) && <Badge variant="outline">Duplicate name</Badge>}
-                      </div>
-                    </td>
-                    <td className="py-2 pr-3">{entry.role ?? "—"}</td>
-                    <td className="py-2 pr-3">
-                      {entry.externalPlayerId ?? "—"}
-                    </td>
-                    <td className="py-2 pr-3">
-                      {entry.startingPriceOverride ?? "—"}
-                    </td>
-                    <td className="py-2 pr-3">
-                      {customFields.length === 0 ? (
-                        "—"
-                      ) : (
-                        <ul className="flex flex-col gap-0.5">
-                          {customFields.map((field) => (
-                            <li
-                              className="text-muted-foreground"
-                              key={field.id}
-                            >
-                              {field.label}:{" "}
-                              {entry.customValues[field.id] ?? "—"}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </td>
-                    <td className="py-2">
-                      <div className="flex gap-1">
-                        <Button
-                          onClick={() => {
-                            setEditingEntryId(entry.id);
-                            setEditingEntry(toFormValues(entry));
-                            setEditingEntryError(null);
-                          }}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          onClick={() => removePlayer(entry.id)}
-                          size="sm"
-                          type="button"
-                          variant="destructive"
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
 
       <PlayerImport auctionId={auctionId} onImported={reloadSetup} />
     </div>

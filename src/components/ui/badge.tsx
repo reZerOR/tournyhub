@@ -8,7 +8,8 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        default:
+          "bg-primary text-primary-foreground [a]:hover:bg-[color-mix(in_oklch,var(--primary),var(--foreground)_8%)]",
         secondary:
           "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
         destructive:
@@ -24,7 +25,7 @@ const badgeVariants = cva(
         roster:
           "border border-roster/40 bg-roster/15 text-roster [a]:hover:bg-roster/25",
         warning:
-          "border border-warning/40 bg-warning/15 text-warning-foreground [a]:hover:bg-warning/25",
+          "border border-warning/40 bg-warning/15 text-warning [a]:hover:bg-warning/25",
         success:
           "border border-success/40 bg-success/15 text-success [a]:hover:bg-success/25",
       },

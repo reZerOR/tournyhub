@@ -7,24 +7,25 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        default:
+          "bg-primary text-primary-foreground hover:bg-[color-mix(in_oklch,var(--primary),var(--foreground)_8%)]",
         outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+          "border-input bg-background/65 text-foreground hover:border-foreground/40 hover:bg-muted aria-expanded:border-foreground/40 aria-expanded:bg-muted aria-expanded:text-foreground",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+          "bg-destructive text-destructive-foreground hover:bg-[color-mix(in_oklch,var(--destructive),var(--foreground)_8%)] focus-visible:border-destructive focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
         // Arena-flavored Button variants. Flat by design: no glow on rest or hover.
-        neon: "border border-neon/60 bg-neon text-neon-foreground hover:bg-neon/90",
+        neon: "border border-neon bg-neon text-neon-foreground hover:bg-[color-mix(in_oklch,var(--neon),var(--foreground)_8%)]",
         "outline-neon":
           "border border-neon/50 bg-transparent text-neon hover:border-neon hover:bg-neon/10",
         "ghost-neon": "bg-transparent text-neon hover:bg-neon/10",
-        bid: "border border-bid/50 bg-bid text-bid-foreground uppercase tracking-wide hover:bg-bid/90",
+        bid: "border border-bid bg-bid text-bid-foreground uppercase tracking-wide hover:bg-[color-mix(in_oklch,var(--bid),var(--foreground)_8%)]",
         trophy:
-          "border border-warning/40 bg-gradient-to-b from-warning/20 to-warning/5 text-warning-foreground hover:from-warning/30 hover:to-warning/10",
+          "border border-warning bg-warning text-warning-foreground hover:bg-[color-mix(in_oklch,var(--warning),var(--foreground)_8%)]",
       },
       size: {
         default:

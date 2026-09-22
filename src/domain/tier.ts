@@ -44,6 +44,22 @@ export function sumTierMaximums(
   return tiers.reduce((total, tier) => total + tier.maxPerTeam, 0);
 }
 
+/** Whether a Tier requires an exact count per Team (min === max > 0). */
+export function isMustHaveTier(tier: {
+  maxPerTeam: number;
+  minPerTeam: number;
+}): boolean {
+  return tier.minPerTeam === tier.maxPerTeam && tier.minPerTeam > 0;
+}
+
+/** The exact Player capacity of a Must-Have Tier, or null for range-based Tiers. */
+export function tierCapacity(
+  tier: { maxPerTeam: number; minPerTeam: number },
+  teamCount: number,
+): number | null {
+  return isMustHaveTier(tier) ? teamCount * tier.minPerTeam : null;
+}
+
 function wholeNumber(
   minimum: number,
   maximum: number,

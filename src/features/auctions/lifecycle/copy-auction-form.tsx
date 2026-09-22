@@ -2,17 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CheckCheck, ListChecks } from "lucide-react";
 
+import { StationGroup, StationPlate } from "@/components/arena";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { defaultCopyTitle } from "@/domain/lifecycle";
 import type { CopySourceOption } from "@/server/auction-query/lifecycle";
@@ -92,38 +96,84 @@ export function CopyAuctionForm({ sources }: { sources: CopySourceOption[] }) {
 
   if (sources.length === 0) return null;
 
+  const source = sources.find((candidate) => candidate.id === sourceAuctionId);
+
   return (
-    <Card className="w-full max-w-lg">
-      <CardHeader>
-        <CardTitle aria-level={2} role="heading">
-          Copy an earlier Auction
-        </CardTitle>
-        <CardDescription>
-          Reuse Rules, Custom Player Fields, and selected Player Entries. Teams,
-          representatives, invitations, Bids, Sales, and Results never copy.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+    <StationPlate
+      footer={
+        sourceAuctionId !== "" ? (
+          <>
+            <p className="font-mono text-xs text-muted-foreground">
+              Teams and history never copy
+            </p>
+            <Button
+              disabled={pending || title.trim() === ""}
+              onClick={submit}
+              type="button"
+              variant="outline"
+            >
+              {pending && <Spinner data-icon="inline-start" />}
+              Copy into a new Draft
+            </Button>
+          </>
+        ) : null
+      }
+      label="Copy an earlier Auction"
+      stat={
+        <>
+          <Badge variant="secondary">Rerun</Badge>
+          {source ? (
+            <span>
+              {source.playerCount}{" "}
+              {source.playerCount === 1 ? "Player" : "Players"} ·{" "}
+              {source.rulesMode === "tiered" ? "Tiered" : "Simple"}
+            </span>
+          ) : null}
+        </>
+      }
+      variant="section"
+    >
+      <StationGroup
+        hint="Rules and Custom Player Fields always come across"
+        label="Source"
+      >
         <Field>
           <FieldLabel htmlFor="copy-source">Source Auction</FieldLabel>
-          <select
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-            id="copy-source"
-            onChange={(event) => void chooseSource(event.target.value)}
+          <Select
+            items={sources.map((option) => ({
+              label: `${option.title || "Untitled Auction"} (${option.playerCount} Players)`,
+              value: option.id,
+            }))}
+            onValueChange={(val) => void chooseSource(val ?? "")}
             value={sourceAuctionId}
           >
-            <option value="">Choose an Auction</option>
-            {sources.map((source) => (
-              <option key={source.id} value={source.id}>
-                {source.title || "Untitled Auction"} ({source.playerCount}{" "}
-                Players)
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-full sm:max-w-md" id="copy-source">
+              <SelectValue placeholder="Choose an Auction">
+                {(val: string | null) => {
+                  const option = sources.find((s) => s.id === val);
+                  return option
+                    ? `${option.title || "Untitled Auction"} (${option.playerCount} Players)`
+                    : (val ?? undefined);
+                }}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {sources.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.title || "Untitled Auction"} ({option.playerCount}{" "}
+                    Players)
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </Field>
+      </StationGroup>
 
-        {sourceAuctionId !== "" && (
-          <>
+      {sourceAuctionId !== "" && (
+        <>
+          <StationGroup label="New Auction title">
             <Field data-invalid={title.trim() === ""}>
               <FieldLabel htmlFor="copy-title">New Auction title</FieldLabel>
               <Input
@@ -131,84 +181,93 @@ export function CopyAuctionForm({ sources }: { sources: CopySourceOption[] }) {
                 id="copy-title"
                 maxLength={200}
                 onChange={(event) => setTitle(event.target.value)}
+                placeholder="Sunday Showdown copy"
                 value={title}
               />
             </Field>
+          </StationGroup>
 
-            <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-medium">
-                Player Entries to copy
-              </legend>
-              {loading ? (
-                <p className="text-sm text-muted-foreground">Loading…</p>
-              ) : players.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  This Auction has no Player Entries.
-                </p>
-              ) : (
-                <>
-                  <div className="flex gap-3">
-                    <Button
-                      onClick={() =>
-                        setSelectedIds(players.map((player) => player.id))
-                      }
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      Select all
-                    </Button>
-                    <Button
-                      onClick={() => setSelectedIds([])}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      Select none
-                    </Button>
-                  </div>
-                  <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
-                    {players.map((player) => (
-                      <li key={player.id}>
-                        <label className="flex items-center gap-2 text-sm">
-                          <input
-                            checked={selectedIds.includes(player.id)}
-                            onChange={() => toggle(player.id)}
-                            type="checkbox"
+          <StationGroup
+            hint={
+              loading
+                ? undefined
+                : `${selectedIds.length} of ${players.length} selected`
+            }
+            label="Player Entries to copy"
+          >
+            {loading ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner />
+                Reading Player Entries...
+              </p>
+            ) : players.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                This Auction has no Player Entries.
+              </p>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() =>
+                      setSelectedIds(players.map((player) => player.id))
+                    }
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <CheckCheck aria-hidden className="size-4" />
+                    Select all
+                  </Button>
+                  <Button
+                    onClick={() => setSelectedIds([])}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Select none
+                  </Button>
+                </div>
+                <ul className="flex max-h-64 flex-col divide-y divide-border/60 overflow-y-auto rounded-lg border border-border/60">
+                  {players.map((player) => (
+                    <li key={player.id}>
+                      <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-muted/40 has-checked:bg-neon/5">
+                        <input
+                          checked={selectedIds.includes(player.id)}
+                          className="size-4 shrink-0 cursor-pointer accent-neon"
+                          onChange={() => toggle(player.id)}
+                          type="checkbox"
+                        />
+                        <span className="min-w-0 flex-1 truncate">
+                          {player.displayName}
+                        </span>
+                        {(player.hasTier ||
+                          player.hasStartingPriceOverride) && (
+                          <ListChecks
+                            aria-label="Carries Tier or price data"
+                            className="size-4 shrink-0 text-muted-foreground"
                           />
-                          <span>{player.displayName}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </fieldset>
+                        )}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </StationGroup>
 
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                checked={keepTierAndPrice}
-                onChange={(event) => setKeepTierAndPrice(event.target.checked)}
-                type="checkbox"
-              />
-              <span>Keep copied Tier assignments and Starting Prices</span>
-            </label>
+          <label className="flex w-fit cursor-pointer items-center gap-2.5 text-sm">
+            <input
+              checked={keepTierAndPrice}
+              className="size-4 shrink-0 cursor-pointer accent-neon"
+              onChange={(event) => setKeepTierAndPrice(event.target.checked)}
+              type="checkbox"
+            />
+            <span>Keep copied Tier assignments and Starting Prices</span>
+          </label>
+        </>
+      )}
 
-            <div>
-              <Button
-                disabled={pending || title.trim() === ""}
-                onClick={submit}
-                type="button"
-              >
-                {pending && <Spinner data-icon="inline-start" />}
-                Copy into a new Draft
-              </Button>
-            </div>
-          </>
-        )}
-
-        {message && <FieldError>{message}</FieldError>}
-      </CardContent>
-    </Card>
+      {message && <FieldError>{message}</FieldError>}
+    </StationPlate>
   );
 }

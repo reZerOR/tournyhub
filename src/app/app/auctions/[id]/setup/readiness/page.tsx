@@ -22,5 +22,5 @@ export default async function ReadinessSetupPage({
   const readiness = await syncAuctionReadiness(getPool(), session.user.id, id);
   if (!readiness) notFound();
 
-  return <ReadinessView auctionId={id} readiness={readiness} />;
+  return <ReadinessView readiness={readiness} />;
 }

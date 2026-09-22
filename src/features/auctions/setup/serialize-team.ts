@@ -92,5 +92,6 @@ export function serializeTier(tier: Tier): SerializedTier {
 export interface SerializedTierAssignment {
   displayName: string;
   id: string;
+  role?: null | string;
   tierId: null | string;
 }

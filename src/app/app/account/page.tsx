@@ -20,7 +20,6 @@ export default async function AccountPage({
       initialUser={{
         email: session.user.email,
         name: session.user.name,
-        soundEnabled: session.user.soundEnabled,
       }}
       oauthError={(await searchParams).error}
     />

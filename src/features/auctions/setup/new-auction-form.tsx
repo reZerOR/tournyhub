@@ -2,15 +2,9 @@
 
 import { useActionState, useState } from "react";
 
+import { StationGroup, StationPlate } from "@/components/arena";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Field,
   FieldError,
@@ -40,59 +34,70 @@ export function NewAuctionForm() {
   const [closeMode, setCloseMode] = useState<CloseMode>("manual");
 
   return (
-    <Card className="w-full max-w-lg">
-      <CardHeader>
-        <CardTitle aria-level={1} role="heading">
-          New Auction
-        </CardTitle>
-        <CardDescription>
-          Set the Basics. You can revisit every setup section before the Auction
-          starts.
-        </CardDescription>
-      </CardHeader>
-      <form action={formAction}>
-        <CardContent>
-          <FieldGroup>
-            <Field data-invalid={Boolean(state.fieldErrors.title)}>
-              <FieldLabel htmlFor="title">Title</FieldLabel>
-              <Input
-                aria-invalid={Boolean(state.fieldErrors.title)}
-                id="title"
-                maxLength={200}
-                name="title"
-                required
-              />
-              {state.fieldErrors.title && (
-                <FieldError>{state.fieldErrors.title}</FieldError>
-              )}
-            </Field>
-            <Field data-invalid={Boolean(state.fieldErrors.game)}>
-              <FieldLabel htmlFor="game">Game</FieldLabel>
-              <Input
-                aria-invalid={Boolean(state.fieldErrors.game)}
-                id="game"
-                maxLength={100}
-                name="game"
-                required
-              />
-              {state.fieldErrors.game && (
-                <FieldError>{state.fieldErrors.game}</FieldError>
-              )}
-            </Field>
-            <input name="rulesMode" type="hidden" value={rulesMode} />
+    <form action={formAction}>
+      <StationPlate
+        footer={
+          <>
+            <p className="font-mono text-xs text-muted-foreground">
+              creates a Draft · nothing goes Live yet
+            </p>
+            <Button disabled={pending} type="submit" variant="neon">
+              {pending && <Spinner data-icon="inline-start" />}
+              Create Draft Auction
+            </Button>
+          </>
+        }
+        label="Start a fresh Draft"
+        stat={<Badge variant="outline">Draft</Badge>}
+      >
+        <FieldGroup>
+          <StationGroup label="Identity">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field data-invalid={Boolean(state.fieldErrors.title)}>
+                <FieldLabel htmlFor="title">Title</FieldLabel>
+                <Input
+                  aria-invalid={Boolean(state.fieldErrors.title)}
+                  id="title"
+                  maxLength={200}
+                  name="title"
+                  placeholder="Sunday Showdown"
+                  required
+                />
+                {state.fieldErrors.title && (
+                  <FieldError>{state.fieldErrors.title}</FieldError>
+                )}
+              </Field>
+              <Field data-invalid={Boolean(state.fieldErrors.game)}>
+                <FieldLabel htmlFor="game">Game</FieldLabel>
+                <Input
+                  aria-invalid={Boolean(state.fieldErrors.game)}
+                  id="game"
+                  maxLength={100}
+                  name="game"
+                  placeholder="Valorant"
+                  required
+                />
+                {state.fieldErrors.game && (
+                  <FieldError>{state.fieldErrors.game}</FieldError>
+                )}
+              </Field>
+            </div>
+          </StationGroup>
+
+          <input name="rulesMode" type="hidden" value={rulesMode} />
+          <input name="closeMode" type="hidden" value={closeMode} />
+
+          <StationGroup label="Rules">
             <RulesModeField onChange={setRulesMode} value={rulesMode} />
-            <input name="closeMode" type="hidden" value={closeMode} />
+          </StationGroup>
+
+          <StationGroup label="Close">
             <CloseModeField onChange={setCloseMode} value={closeMode} />
-            {state.error && <FieldError>{state.error}</FieldError>}
-          </FieldGroup>
-        </CardContent>
-        <CardFooter>
-          <Button disabled={pending} type="submit">
-            {pending && <Spinner data-icon="inline-start" />}
-            Create Draft Auction
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+          </StationGroup>
+
+          {state.error && <FieldError>{state.error}</FieldError>}
+        </FieldGroup>
+      </StationPlate>
+    </form>
   );
 }

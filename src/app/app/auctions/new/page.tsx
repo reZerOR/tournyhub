@@ -13,7 +13,11 @@ export default async function NewAuctionPage() {
   const sources = await getCopySourcesForOrganizer(getPool(), session.user.id);
 
   return (
-    <div className="flex flex-col items-center gap-6">
+    <div className="setup-console mx-auto flex w-full max-w-3xl flex-col gap-5">
+      <h1 className="font-display text-2xl font-semibold tracking-tight text-balance">
+        New Auction
+      </h1>
+
       <NewAuctionForm />
       <CopyAuctionForm sources={sources} />
     </div>

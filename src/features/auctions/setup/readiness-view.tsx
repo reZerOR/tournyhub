@@ -1,21 +1,9 @@
-"use client";
-
 import Link from "next/link";
-import { useState } from "react";
+import { CircleCheck, TriangleAlert } from "lucide-react";
 
+import { StationGroup, StationLamp, StationPlate } from "@/components/arena";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { FieldError } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import { READINESS_GROUPS, type ReadinessIssue } from "@/domain/readiness";
-import { startAuctionAction } from "@/features/auctions/setup/readiness-actions";
 
 const GROUP_LABELS: Record<(typeof READINESS_GROUPS)[number], string> = {
   feasibility: "Feasibility",
@@ -26,121 +14,136 @@ const GROUP_LABELS: Record<(typeof READINESS_GROUPS)[number], string> = {
   tiers: "Tiers",
 };
 
-function IssueList({
-  issues,
-  title,
-}: {
-  issues: ReadinessIssue[];
-  title: string;
-}) {
+/*
+  Readiness is a checklist, not an explanation: one lane per group that still
+  has something wrong, one line per requirement, and one Fix link that goes
+  straight to the station that owns it. The launch gate itself lives in the
+  command bar, so this surface never offers a second way to start.
+*/
+function IssueRows({ issues }: { issues: ReadinessIssue[] }) {
   return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium">{title}</h3>
-      <ul className="flex flex-col gap-2">
-        {READINESS_GROUPS.map((group) => {
-          const grouped = issues.filter((issue) => issue.group === group);
-          if (grouped.length === 0) return null;
-          return (
-            <li key={group} className="flex flex-col gap-1">
-              <span className="text-sm font-medium">{GROUP_LABELS[group]}</span>
-              <ul className="flex list-disc flex-col gap-1 pl-5">
-                {grouped.map((issue, index) => (
-                  <li key={`${group}-${index}`} className="text-sm">
-                    {issue.message}{" "}
-                    <Link className="underline" href={issue.href}>
-                      Fix
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <ul className="flex flex-1 flex-col divide-y divide-border/50">
+      {issues.map((issue, index) => (
+        <li
+          className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2 first:pt-0 last:pb-0"
+          key={`${issue.group}-${index}`}
+        >
+          <span className="text-sm text-pretty">{issue.message}</span>
+          <Link
+            className="font-mono text-xs text-neon underline-offset-4 hover:underline"
+            href={issue.href}
+          >
+            Fix
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 export function ReadinessView({
-  auctionId,
   readiness,
 }: {
-  auctionId: string;
   readiness: {
     errors: ReadinessIssue[];
     ready: boolean;
     warnings: ReadinessIssue[];
   };
 }) {
-  const [pending, setPending] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<null | string>(null);
-  const [issues, setIssues] = useState<string[]>([]);
-
-  async function start() {
-    setPending(true);
-    setErrorMessage(null);
-    setIssues([]);
-    const result = await startAuctionAction(auctionId);
-    setPending(false);
-    if (result.status === "error") {
-      setErrorMessage(result.message);
-      setIssues(result.issues);
-    }
-  }
+  const outstanding = readiness.errors.length;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle aria-level={2} role="heading">
-          Readiness
-        </CardTitle>
-        <CardDescription>
-          Readiness is derived from the current setup. The Auction returns to
-          Draft when an edit makes it invalid.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <p aria-live="polite" className="text-sm font-medium" role="status">
-          {readiness.ready
-            ? "Every requirement holds. This Auction is Ready."
-            : `${readiness.errors.length} requirement${
-                readiness.errors.length === 1 ? "" : "s"
-              } still need attention.`}
-        </p>
-
-        {readiness.errors.length > 0 && (
-          <IssueList issues={readiness.errors} title="Errors" />
+    <StationPlate
+      label="Readiness"
+      stat={
+        <span className={readiness.ready ? "text-roster" : "text-warning"}>
+          {readiness.ready ? "ready" : `${outstanding} open`}
+        </span>
+      }
+    >
+      <p
+        aria-live="polite"
+        className="flex items-start gap-2.5 text-sm"
+        role="status"
+      >
+        {readiness.ready ? (
+          <CircleCheck
+            aria-hidden
+            className="mt-0.5 size-4 shrink-0 text-roster"
+          />
+        ) : (
+          <TriangleAlert
+            aria-hidden
+            className="mt-0.5 size-4 shrink-0 text-warning"
+          />
         )}
+        {readiness.ready
+          ? "Every requirement holds. This Auction is Ready."
+          : `${outstanding} requirement${
+              outstanding === 1 ? "" : "s"
+            } still need attention.`}
+      </p>
 
-        {readiness.warnings.length > 0 && (
-          <Alert>
-            <AlertTitle>Warnings</AlertTitle>
+      {outstanding > 0 && (
+        <StationGroup label="Requirements">
+          <div className="flex flex-col divide-y divide-border/60">
+            {READINESS_GROUPS.map((group) => {
+              const grouped = readiness.errors.filter(
+                (issue) => issue.group === group,
+              );
+              if (grouped.length === 0) return null;
+              return (
+                <div
+                  className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:gap-5"
+                  key={group}
+                >
+                  <span className="flex items-center gap-2.5 sm:w-36 sm:shrink-0">
+                    <StationLamp
+                      state={group === "feasibility" ? "blocked" : "pending"}
+                    />
+                    <span className="text-[0.7rem] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+                      {GROUP_LABELS[group]}
+                    </span>
+                  </span>
+                  <IssueRows issues={grouped} />
+                </div>
+              );
+            })}
+          </div>
+        </StationGroup>
+      )}
+
+      {readiness.warnings.length > 0 && (
+        <StationGroup label="Warnings">
+          <Alert variant="warning">
+            <AlertTitle>{readiness.warnings.length} warning</AlertTitle>
             <AlertDescription>
-              <IssueList issues={readiness.warnings} title="Warnings" />
+              <ul className="flex flex-col divide-y divide-warning/20">
+                {readiness.warnings.map((warning, index) => (
+                  <li
+                    className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2 first:pt-0 last:pb-0"
+                    key={`${warning.group}-${index}`}
+                  >
+                    <span className="text-balance text-warning/90">
+                      {warning.message}
+                    </span>
+                    <Link
+                      className="font-mono text-xs text-warning underline-offset-4 hover:underline"
+                      href={warning.href}
+                    >
+                      Fix
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </AlertDescription>
           </Alert>
-        )}
+        </StationGroup>
+      )}
 
-        {errorMessage && <FieldError>{errorMessage}</FieldError>}
-        {issues.length > 0 && (
-          <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
-            {issues.map((issue, index) => (
-              <li key={index}>{issue}</li>
-            ))}
-          </ul>
-        )}
-
-        <div>
-          <Button
-            disabled={pending || !readiness.ready}
-            onClick={start}
-            type="button"
-          >
-            {pending && <Spinner data-icon="inline-start" />}
-            Start Auction
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      <p className="font-mono text-xs text-muted-foreground">
+        derived from setup · an edit returns it to Draft
+      </p>
+    </StationPlate>
   );
 }

@@ -1,19 +1,31 @@
 "use client";
 
 import { type FormEvent, useMemo, useState } from "react";
+import { Download, FileSpreadsheet } from "lucide-react";
 
+import { StationGroup, StationPlate } from "@/components/arena";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { PLAYER_ENTRY_LIMITS } from "@/domain/player-entry";
 import {
   CUSTOM_IMPORT_PREFIX,
@@ -225,21 +237,19 @@ export function PlayerImport({
     : true;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle aria-level={2} role="heading">
-          Import Player Entries
-        </CardTitle>
-        <CardDescription>
-          Upload a CSV or XLSX file, map its columns, and review every row
-          before anything is saved. Supported files are at most{" "}
-          {PLAYER_IMPORT_MAX_MEGABYTES} MB,{" "}
-          {PLAYER_IMPORT_LIMITS.maxRows.toLocaleString()} rows,{" "}
-          {PLAYER_IMPORT_LIMITS.maxWorksheets} worksheets, and{" "}
-          {PLAYER_IMPORT_LIMITS.maxColumns} columns.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-6">
+    <StationPlate
+      label="Import Player Entries"
+      stat={
+        <>
+          csv · xlsx · ≤{PLAYER_IMPORT_MAX_MEGABYTES} MB · ≤
+          {PLAYER_IMPORT_LIMITS.maxRows.toLocaleString()} rows · ≤
+          {PLAYER_IMPORT_LIMITS.maxWorksheets} sheets · ≤
+          {PLAYER_IMPORT_LIMITS.maxColumns} columns
+        </>
+      }
+      variant="section"
+    >
+      <StationGroup label="Source file">
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={requestPreview}
@@ -260,69 +270,122 @@ export function PlayerImport({
             />
           </Field>
           <Button disabled={pending || !file} type="submit">
+            <FileSpreadsheet aria-hidden className="size-4" />
             Preview import
           </Button>
         </form>
 
-        {previewData && worksheet && preview && (
-          <section className="flex flex-col gap-4">
-            {previewData.worksheets.length > 1 && (
+        <p
+          aria-live="polite"
+          className="font-mono text-xs text-muted-foreground"
+          role="status"
+        >
+          {pending
+            ? "Reading the file…"
+            : errorMessage
+              ? `Import failed: ${errorMessage}`
+              : (resultMessage ?? "")}
+        </p>
+      </StationGroup>
+
+      {previewData && worksheet && preview && (
+        <>
+          {previewData.worksheets.length > 1 && (
+            <StationGroup label="Worksheet">
               <Field className="max-w-sm">
                 <FieldLabel htmlFor="player-import-worksheet">
                   Worksheet
                 </FieldLabel>
-                <select
-                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-                  id="player-import-worksheet"
-                  onChange={(event) => applyWorksheet(event.target.value)}
+                <Select
+                  onValueChange={(val) => val && applyWorksheet(val)}
                   value={worksheetName}
                 >
-                  {previewData.worksheets.map((candidate) => (
-                    <option key={candidate.name} value={candidate.name}>
-                      {candidate.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-
-            <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-medium">Column mapping</h3>
-              <ul className="flex flex-col gap-2">
-                {worksheet.columns.map((column, index) => (
-                  <li
-                    className="flex flex-wrap items-center gap-3"
-                    key={`${column}-${index}`}
-                  >
-                    <span className="min-w-40 text-sm font-medium">
-                      {column || `Column ${index + 1}`}
-                    </span>
-                    <select
-                      aria-label={`Map column ${column || index + 1}`}
-                      className="h-8 min-w-48 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-                      onChange={(event) => {
-                        setMapping((previous) =>
-                          previous.map((value, position) =>
-                            position === index
-                              ? (event.target.value as ImportTarget)
-                              : value,
-                          ),
-                        );
-                        setCommandId(crypto.randomUUID());
-                      }}
-                      value={mapping[index] ?? "ignore"}
-                    >
-                      <option value="ignore">Do not import</option>
-                      {targetOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
+                  <SelectTrigger className="w-full" id="player-import-worksheet">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {previewData.worksheets.map((candidate) => (
+                        <SelectItem
+                          key={candidate.name}
+                          value={candidate.name}
+                        >
+                          {candidate.name}
+                        </SelectItem>
                       ))}
-                    </select>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </StationGroup>
+          )}
+
+          <StationGroup
+            hint={`${worksheet.columns.length} columns`}
+            label="Column mapping"
+          >
+            <ul className="flex flex-col divide-y divide-border/60">
+              {worksheet.columns.map((column, index) => (
+                <li
+                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 first:pt-0 last:pb-0"
+                  key={`${column}-${index}`}
+                >
+                  <span className="min-w-40 font-mono text-xs">
+                    {column || `Column ${index + 1}`}
+                  </span>
+                  <Select
+                    items={[
+                      { label: "Do not import", value: "ignore" },
+                      ...targetOptions.map((option) => ({
+                        label: option.label,
+                        value: option.value,
+                      })),
+                    ]}
+                    onValueChange={(val) => {
+                      if (!val) return;
+                      setMapping((previous) =>
+                        previous.map((value, position) =>
+                          position === index
+                            ? (val as ImportTarget)
+                            : value,
+                        ),
+                      );
+                      setCommandId(crypto.randomUUID());
+                    }}
+                    value={mapping[index] ?? "ignore"}
+                  >
+                    <SelectTrigger
+                      aria-label={`Map column ${column || index + 1}`}
+                      className="w-56"
+                    >
+                      <SelectValue>
+                        {(val: string | null) =>
+                          val === "ignore"
+                            ? "Do not import"
+                            : (targetOptions.find((o) => o.value === val)?.label ??
+                              val)
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="ignore">
+                          Do not import
+                        </SelectItem>
+                        {targetOptions.map((option) => (
+                          <SelectItem
+                            key={option.value}
+                            value={option.value}
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </li>
+              ))}
+            </ul>
 
             {preview.mappingProblems.length > 0 && (
               <Alert variant="destructive">
@@ -336,7 +399,12 @@ export function PlayerImport({
                 </AlertDescription>
               </Alert>
             )}
+          </StationGroup>
 
+          <StationGroup
+            hint={`${preview.acceptedCount} accepted · ${preview.warningCount} warnings · ${preview.errorCount} errors`}
+            label="Review"
+          >
             <p className="text-sm" role="status">
               {preview.acceptedCount} Player{" "}
               {preview.acceptedCount === 1 ? "Entry" : "Entries"} accepted,{" "}
@@ -360,93 +428,67 @@ export function PlayerImport({
                 type="button"
                 variant="outline"
               >
+                <Download aria-hidden className="size-4" />
                 Download errors
               </Button>
             </div>
 
             {preview.results.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <caption className="sr-only">
-                    Normalized Player import preview
-                  </caption>
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="py-2 pr-3 font-medium" scope="col">
-                        Row
-                      </th>
-                      <th className="py-2 pr-3 font-medium" scope="col">
-                        Status
-                      </th>
-                      <th className="py-2 pr-3 font-medium" scope="col">
-                        Name
-                      </th>
-                      <th className="py-2 pr-3 font-medium" scope="col">
-                        Values
-                      </th>
-                      <th className="py-2 font-medium" scope="col">
-                        Notes
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.results.slice(0, MAX_PREVIEW_ROWS).map((row) => (
-                      <tr
-                        className="border-b align-top last:border-0"
-                        key={row.sourceRow}
-                      >
-                        <td className="py-2 pr-3 tabular-nums">
-                          {row.sourceRow}
-                        </td>
-                        <td className="py-2 pr-3">
-                          <Badge
-                            variant={
-                              row.status === "error" ? "destructive" : "outline"
-                            }
-                          >
-                            {statusLabel(row.status)}
-                          </Badge>
-                        </td>
-                        <td className="py-2 pr-3">
-                          {row.entry?.displayName ?? "—"}
-                        </td>
-                        <td className="py-2 pr-3">
-                          {row.entry
-                            ? describeEntry(row.entry, previewData.customFields)
-                            : "—"}
-                        </td>
-                        <td className="py-2">
-                          {row.messages.length === 0
-                            ? "—"
-                            : row.messages.join(" ")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {preview.results.length > MAX_PREVIEW_ROWS && (
-                  <p className="pt-2 text-sm text-muted-foreground">
-                    Showing the first {MAX_PREVIEW_ROWS} of{" "}
-                    {preview.results.length} rows.
-                  </p>
-                )}
-              </div>
+              <Table>
+                <TableCaption className="sr-only">
+                  Normalized Player import preview
+                </TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-14 text-right">Row</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Values</TableHead>
+                    <TableHead>Notes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {preview.results.slice(0, MAX_PREVIEW_ROWS).map((row) => (
+                    <TableRow key={row.sourceRow}>
+                      <TableCell className="text-right font-mono tabular-nums">
+                        {row.sourceRow}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            row.status === "error" ? "destructive" : "outline"
+                          }
+                        >
+                          {statusLabel(row.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {row.entry?.displayName ?? "—"}
+                      </TableCell>
+                      <TableCell className="whitespace-normal text-muted-foreground">
+                        {row.entry
+                          ? describeEntry(row.entry, previewData.customFields)
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="whitespace-normal text-muted-foreground">
+                        {row.messages.length === 0
+                          ? "—"
+                          : row.messages.join(" ")}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
-          </section>
-        )}
-
-        <p
-          aria-live="polite"
-          className="text-sm text-muted-foreground"
-          role="status"
-        >
-          {pending
-            ? "Working…"
-            : errorMessage
-              ? `Import failed: ${errorMessage}`
-              : (resultMessage ?? "")}
-        </p>
-      </CardContent>
-    </Card>
+            {preview.results.length > MAX_PREVIEW_ROWS && (
+              <p className="text-sm text-muted-foreground">
+                Showing the first {MAX_PREVIEW_ROWS} of {preview.results.length}{" "}
+                rows.
+              </p>
+            )}
+          </StationGroup>
+        </>
+      )}
+    </StationPlate>
   );
 }

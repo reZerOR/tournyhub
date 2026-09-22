@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import {
+  assignMultiplePlayerTiers,
   assignPlayerTier,
   createTier,
   deleteTier,
@@ -11,6 +12,7 @@ import {
   updateTier,
 } from "@/server/auction-command/tiers";
 import { getPlayerEntriesForOrganizer } from "@/server/auction-query/player-entries";
+import { getTeamsForOrganizer } from "@/server/auction-query/teams";
 import { getTiersForOrganizer } from "@/server/auction-query/tiers";
 import { getCurrentSession } from "@/server/auth/session";
 import { getPool } from "@/server/database/pool";
@@ -28,6 +30,7 @@ export type TierResult =
 
 export interface TiersBoard {
   assignments: SerializedTierAssignment[];
+  teamCount: number;
   tiers: SerializedTier[];
 }
 
@@ -63,11 +66,12 @@ export async function loadTiersBoardAction(
   const session = await getCurrentSession();
   if (!session) return null;
 
-  const [tiers, entries] = await Promise.all([
+  const [tiers, entries, teams] = await Promise.all([
     getTiersForOrganizer(getPool(), session.user.id, auctionId),
     getPlayerEntriesForOrganizer(getPool(), session.user.id, auctionId),
+    getTeamsForOrganizer(getPool(), session.user.id, auctionId),
   ]);
-  if (!tiers || !entries) return null;
+  if (!tiers || !entries || !teams) return null;
 
   return {
     assignments: entries
@@ -75,11 +79,14 @@ export async function loadTiersBoardAction(
       .map((entry) => ({
         displayName: entry.displayName,
         id: entry.id,
+        role: entry.role,
         tierId: entry.tierId,
       })),
+    teamCount: teams.length,
     tiers: tiers.map(serializeTier),
   };
 }
+
 
 export async function createTierAction(
   auctionId: string,
@@ -198,3 +205,28 @@ export async function assignPlayerTierAction(
     return toError(error);
   }
 }
+
+export async function assignMultiplePlayerTiersAction(
+  auctionId: string,
+  playerEntryIds: string[],
+  tierId: null | string,
+): Promise<{ message?: string; status: "saved" | "error" }> {
+  const session = await getCurrentSession();
+  if (!session) return { message: "Sign in to save changes.", status: "error" };
+
+  try {
+    const assigned = await assignMultiplePlayerTiers(
+      getPool(),
+      session.user.id,
+      auctionId,
+      playerEntryIds,
+      tierId,
+    );
+    return assigned
+      ? { status: "saved" }
+      : { message: NOT_EDITABLE, status: "error" };
+  } catch (error) {
+    return toError(error);
+  }
+}
+

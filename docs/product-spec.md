@@ -23,7 +23,7 @@ Canonical definitions live in [the domain glossary](../CONTEXT.md).
 
 Users sign in through email OTP or Google. Passwords are not supported. New registrations are open, and targeted Team invitations may lead a new User through registration. A User sees Auctions they organize, Teams they represent, pending invitations, and archived Auctions.
 
-Account settings include display name, light or dark appearance, sound preferences, active sessions, sign-out controls, and Google-link status. Account deletion is deferred.
+Account settings include display name, read-only verified email, active sessions, sign-out controls, and Google-link status. Appearance is permanently dark, while live sound is controlled from the Live Auction console. Account deletion is deferred.
 
 ## Creating an Auction
 
@@ -154,7 +154,7 @@ The Organizer's Results CSV includes every supplied Player phone number. A Team 
 
 ## Interface requirements
 
-The application supports light and dark appearance, responsive desktop and mobile layouts, English copy, local-time display, and UTC storage. It uses a neutral sports control-room style with indigo primary actions, green completed states, amber closing warnings, red destructive or rejected states, and Team colors as identifiers only.
+The application uses a permanent dark appearance, responsive desktop and mobile layouts, English copy, local-time display, and UTC storage. It uses a neutral sports control-room style with indigo primary actions, green completed states, amber closing warnings, red destructive or rejected states, and Team colors as identifiers only.
 
 Live prices, Budgets, timers, and counts use tabular numerals. Bid submission is one action with no confirmation dialog. The button displays the exact next price, becomes pending during submission, and reports the authoritative result.
 

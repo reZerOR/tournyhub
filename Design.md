@@ -67,12 +67,12 @@ utilities (`bg-neon`, `text-bid`, etc.).
 | --------------- | ----------------------- | --------------------------- |
 | `--background`  | `oklch(0.13 0.025 260)` | Deep navy canvas            |
 | `--foreground`  | `oklch(0.96 0.01 240)`  | Body type                   |
-| `--primary`     | `oklch(0.72 0.2 235)`   | Electric cyan (royal stage) |
-| `--neon`        | `oklch(0.78 0.22 235)`  | Hotter cyan for glows       |
-| `--bid`         | `oklch(0.72 0.24 295)`  | Magenta-violet              |
-| `--roster`      | `oklch(0.78 0.18 175)`  | Teal                        |
-| `--warning`     | `oklch(0.82 0.18 75)`   | Amber                       |
-| `--destructive` | `oklch(0.7 0.22 22)`    | Coral red                   |
+| `--primary`     | `oklch(0.78 0.13 235)`  | Electric cyan (royal stage) |
+| `--neon`        | `oklch(0.84 0.09 235)`  | Hotter cyan for glows       |
+| `--bid`         | `oklch(0.78 0.12 295)`  | Magenta-violet              |
+| `--roster`      | `oklch(0.78 0.14 175)`  | Teal                        |
+| `--warning`     | `oklch(0.82 0.15 75)`   | Amber                       |
+| `--destructive` | `oklch(0.8 0.11 22)`    | Coral red                   |
 | `--spotlight`   | `oklch(0.05 0.02 260)`  | Stage backdrop              |
 
 TournyHub renders only this dark palette. `<html>` always carries `.dark` so
@@ -132,6 +132,10 @@ Two arena-specific elevations live in `globals.css`:
 Plus a `--shadow-arena-trophy` reserved for the ResultsTrophy and the
 home hero spotlight.
 
+`.setup-console` scopes the browser surfaces a long working session touches —
+the caret, text selection, and thin scrollbars — so a console of dense
+numerals does not sit on browser defaults.
+
 ---
 
 ## 2. Component library
@@ -143,32 +147,40 @@ from primitives — never custom divs dressed up to look like a primitive.
 ### 2.1 shadcn primitives installed
 
 `alert`, `avatar`, `badge`, `button`, `card`, `dialog`, `field`, `input`,
-`empty`, `input-otp`, `label`, `select`, `separator`, `sheet`, `sonner`, `spinner`,
-`switch`, `table`, `tabs`, `toggle`, `toggle-group`, `tooltip`.
+`empty`, `input-otp`, `label`, `native-select`, `select`, `separator`,
+`sheet`, `sonner`, `spinner`, `switch`, `table`, `tabs`, `toggle`,
+`toggle-group`, `tooltip`.
 
 Components are `base` style (Base UI primitives, not Radix). Style:
 `base-nova`. Icon library: `lucide-react`.
 
 ### 2.2 TournyHub composites (`@/components/arena`)
 
-| Component             | When to use                                                                |
-| --------------------- | -------------------------------------------------------------------------- |
-| `<AuctionPanel>`      | The neon-rimmed rectangle framing every Auction module. Three tones.       |
-| `<BidConsole>`        | The dedicated Bid placement surface a Team Rep uses inside a Live Auction. |
-| `<TeamChip>`          | Team row in the Teams list / sidebar. Color comes from Team profile color. |
-| `<PlayerRow>`         | Player row in the active-Tier list. Highlights the active Player.          |
-| `<LiveBadge>`         | The pulsing "LIVE" indicator. Used in headers and live console.            |
-| `<Trophy>`            | The SVG trophy centerpiece. Used in hero, completed auctions, sign-in.     |
-| `<ArenaBanner>`       | The slanted pennant behind the trophy. Used for section labels.            |
-| `<CreditDisplay>`     | Whole-number Credit display. Always monospace, always suffixed `cr`.       |
-| `<LiveAuctionStage>`  | The whole Live Auction layout: trophy + active player + bid + lists.       |
-| `<ResultsTrophy>`     | Completed Auction layout: trophy, champion, final standings.               |
-| `<AuctionHero>`       | The full-bleed arena landing surface on `/` and `/auctions/[id]/ready`.    |
-| `<AuctionStatusCard>` | The auction list card on `/auctions`. One rail color per lifecycle state.  |
+| Component              | When to use                                                                |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `<AuctionPanel>`       | The neon-rimmed rectangle framing every Auction module. Three tones.       |
+| `<BidConsole>`         | The dedicated Bid placement surface a Team Rep uses inside a Live Auction. |
+| `<TeamChip>`           | Team row in the Teams list / sidebar. Color comes from Team profile color. |
+| `<PlayerRow>`          | Player row in the active-Tier list. Highlights the active Player.          |
+| `<LiveBadge>`          | The pulsing "LIVE" indicator. Used in headers and live console.            |
+| `<Trophy>`             | The SVG trophy centerpiece. Used in hero, completed auctions, sign-in.     |
+| `<ArenaBanner>`        | The slanted pennant. `default` for hero labels, `sm` for a station header. |
+| `<CreditDisplay>`      | Whole-number Credit display. Always monospace, always suffixed `cr`.       |
+| `<LiveAuctionStage>`   | The whole Live Auction layout: trophy + active player + bid + lists.       |
+| `<ResultsTrophy>`      | Completed Auction layout: trophy, champion, final standings.               |
+| `<AuctionHero>`        | The full-bleed arena landing surface on `/` and `/auctions/[id]/ready`.    |
+| `<AuctionStatusCard>`  | The auction list card on `/auctions`. One rail color per lifecycle state.  |
+| `<StationRail>`        | The ordered station list of a multi-step Operate surface.                  |
+| `<StationRailItem>`    | One station row: readiness lamp, label, open-requirement count.            |
+| `<StationLamp>`        | The readiness lamp itself. `clear` / `pending` / `blocked` / `unknown`.    |
+| `<StationPlate>`       | One station: pennant header, monospace readout, optional action footer.    |
+| `<StationGroup>`       | A named division inside a plate, divided by a hairline rather than a box.  |
+| `<CommandBar>`         | The bar pinned to the bottom of a working column: its one key action.      |
+| `<Stat>` `<StatStrip>` | The monospace fact row. Facts only; an explanation never goes here.        |
 
 ### 2.3 Button variants (extended)
 
-The default Button stays compatible with shadcn. TournyHub adds four
+The default Button stays compatible with shadcn. TournyHub adds five
 arena-flavored variants. Pick by intent, not by decoration.
 
 | Variant            | When                                                                   |
@@ -194,6 +206,11 @@ Sizes:
 Rules:
 
 - **One neon Button per visible viewport.** Two or more dilutes the stage.
+- **Filled Button labels meet at least APCA Lc 60 and WCAG 4.5:1.** Their
+  hover colors stay opaque and move lighter so contrast cannot collapse over
+  the arena image.
+- **Outlined Button boundaries meet WCAG 3:1** against the dark card surface.
+  Use the `--input` control-border token rather than a decorative divider.
 - **Never use `variant="neon"` for inline actions** in dense rows. Use
   `ghost-neon` or `outline-neon`.
 - **Bid placement is always `variant="bid"` and `size="xl"`.** No smaller.
@@ -232,7 +249,11 @@ All forms follow shadcn rules:
 - Wrap in `<FieldGroup>` and use `<Field>` per row.
 - Use `<InputGroup>` + `<InputGroupAddon>` for buttons inside inputs.
 - ToggleGroup for 2–7 options (Bid Increment choices, Rule Mode).
+- Choice lists that must stay a real `<select>` use `<NativeSelect>` — the
+  platform picker is faster for a long list and works before hydration.
 - FieldSet + FieldLegend for grouped checkbox/radio (Custom Player Fields).
+- A numeric field draws its unit inside itself (`cr`, `s`) rather than
+  stating it in prose beneath the label.
 - Validate with `data-invalid` on `<Field>` and `aria-invalid` on the
   control. Disabled submit only when the server requires it; prefer to
   show the error and let the user fix it.
@@ -305,16 +326,56 @@ and Paused state use `<Alert variant="warning">` or `live`.
 Team name in neon, final standings table inside `<AuctionPanel
 tone="trophy">`. Export buttons use `variant="trophy"`.
 
-### 3.6 Organizer setup (`/auctions/new`, `/auctions/[id]/draft`)
+### 3.6 Organizer setup (`/auctions/new`, `/auctions/[id]/setup/*`)
 
-Form-heavy surface. `<Card>` for each configuration section. Tiered Rules
-switches between Simple and Tiered via `<ToggleGroup>`. Custom Player
-Fields use `<FieldSet>`.
+The Setup console. An identity band (Auction name in display type, a
+lifecycle `<Badge>`, a `<StatStrip>` of Game / Rules / Close, and Manage
+Auction) sits above two columns:
+
+- A `<StationRail>` on the left lists the stations in the order they are
+  worked — Basics, Players, Teams, Representatives, Rules, Tiers (Tiered
+  Rules only), Readiness. Every row carries a `<StationLamp>` lit by the
+  same Readiness engine that gates the Auction, plus the count of open
+  requirements that station owns. The rail is the Draft's progress map.
+- The right column holds the active `<StationPlate>` and a sticky
+  `<CommandBar>` carrying the open-requirement readout and the one neon
+  Start Auction button. Starting lives only in that bar, on every station,
+  and the server names what is missing when it refuses.
+
+Each station is one `<StationPlate>`: a small `<ArenaBanner>` pennant names
+it and a monospace readout at its right reports the save state and the
+station's own count. Hairline `<StationGroup>` rules divide its work; the
+plate footer holds the station's action. Rosters and ladders use `<Table>`
+with a caption, or hairline-divided rows, and their empty state is the
+`<Empty>` composition. Tiered Rules is a `<ToggleGroup>`, Custom Player
+Fields a list of labelled inputs.
+
+`/auctions/new` uses the same plate for both entries — Start a fresh Draft
+(neon, one per viewport) and Copy an earlier Auction (outline).
+
+Two rules keep the rail honest, because a gate that lies is worse than no
+gate: the Readiness lamp reports the whole gate rather than the one group of
+requirements it happens to own, and the console re-reads the route whenever
+the Organizer moves station or a station saves. Setup is a shared layout, so
+without the second rule the lamps and the launch count would replay whatever
+the station looked like the first time it was opened.
 
 ### 3.7 Account / Admin
 
-Dense tables (`<Table>`) inside `<AuctionPanel tone="glass">`. These routes
-share the authenticated arena sidebar and account header with the Dashboard.
+The Account route opens with a compact identity header (avatar, name, email,
+current device, plus verified-email, Google, and session-count badges)
+followed by a single `dashboard-panel` command column: **Profile**,
+**Active sessions**, and **Connected accounts** stack as divided sections
+with hairline separators instead of nested cards. Sessions render as compact
+rows with device, active date, and IP on one line, with bulk sign-out actions
+right-aligned in the section footer. A short ShieldCheck note replaces the
+snapshot rail. Keep the page permanently dark and do not add an Appearance, Sound, or general
+Preferences section. Recent-auth challenges open in a focused `<Dialog>` so
+the page structure stays stable.
+
+Admin routes use dense tables (`<Table>`) inside
+`<AuctionPanel tone="glass">`. Both areas share the authenticated arena
+sidebar and account header with the Dashboard.
 
 ---
 
@@ -404,6 +465,9 @@ rules:
 
 - One verb per button: "Start auction", "Place bid", "Resume auction",
   "Force assign". No "OK", "Confirm", "Yes".
+- **Never put a sentence under a heading.** A title carries its own weight;
+  the fact behind it belongs beside the control it constrains, in the
+  monospace register (`cr`, `max 2,000`, `3s warning`, `saves as you type`).
 - Errors are recovery paths. "Bid rejected — only 240 credits remain."
   Never "Invalid input".
 - Empty states teach the space: "No players in this tier yet. Import
@@ -432,37 +496,47 @@ that would betray AI generic UI:
 - **Indistinguishable icon set** — refuse. Use `lucide-react` with the
   same icon family across surfaces (Gavel for Bid, Crown for Champion,
   Radio for Live).
+- **A settings page in costume** — refuse. A multi-step Operate surface
+  uses the station rail + plate + command bar composition, never a stack of
+  titled cards with a sentence explaining each one.
 
 ---
 
 ## 10. Files
 
-| Path                                           | Purpose                                                      |
-| ---------------------------------------------- | ------------------------------------------------------------ |
-| `src/app/globals.css`                          | Color tokens, arena utilities, focus/motion rules.           |
-| `src/app/layout.tsx`                           | Root layout: permanent dark class, TooltipProvider, Toaster. |
-| `src/app/app/layout.tsx`                       | Authenticated arena shell and account header.                |
-| `src/app/app/page.tsx`                         | Dashboard hero, Auction tables, and empty states.            |
-| `src/features/navigation/app-navigation.tsx`   | Desktop and mobile authenticated navigation.                 |
-| `src/components/ui/button.tsx`                 | Button + neon/bid/trophy variants.                           |
-| `src/components/ui/badge.tsx`                  | Badge + neon/bid/roster/warning/success variants.            |
-| `src/components/ui/alert.tsx`                  | Alert + neon/live/warning/success variants.                  |
-| `src/components/ui/sonner.tsx`                 | Arena-styled dark toasts.                                    |
-| `src/components/ui/*`                          | Other shadcn primitives (Dialog, Sheet, Table, Tabs…).       |
-| `src/components/arena/index.ts`                | Public barrel for TournyHub composites.                      |
-| `src/components/arena/auction-panel.tsx`       | The base glassy/neon panel wrapper.                          |
-| `src/components/arena/bid-controls.tsx`        | `<BidConsole>`.                                              |
-| `src/components/arena/team-chip.tsx`           | `<TeamChip>`.                                                |
-| `src/components/arena/player-row.tsx`          | `<PlayerRow>`.                                               |
-| `src/components/arena/live-badge.tsx`          | `<LiveBadge>`.                                               |
-| `src/components/arena/trophy.tsx`              | `<Trophy>` SVG.                                              |
-| `src/components/arena/arena-banner.tsx`        | `<ArenaBanner>` pennant.                                     |
-| `src/components/arena/credit-display.tsx`      | `<CreditDisplay>`.                                           |
-| `src/components/arena/live-auction-stage.tsx`  | `<LiveAuctionStage>`.                                        |
-| `src/components/arena/results-trophy.tsx`      | `<ResultsTrophy>`.                                           |
-| `src/components/arena/auction-hero.tsx`        | `<AuctionHero>`.                                             |
-| `src/components/arena/auction-status-card.tsx` | `<AuctionStatusCard>`.                                       |
-| `public/background.png`                        | The arena reference image.                                   |
+| Path                                            | Purpose                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| `src/app/globals.css`                           | Color tokens, arena utilities, focus/motion rules.           |
+| `src/app/layout.tsx`                            | Root layout: permanent dark class, TooltipProvider, Toaster. |
+| `src/app/app/layout.tsx`                        | Authenticated arena shell and account header.                |
+| `src/app/app/page.tsx`                          | Dashboard hero, Auction tables, and empty states.            |
+| `src/features/navigation/app-navigation.tsx`    | Desktop and mobile authenticated navigation.                 |
+| `src/components/ui/button.tsx`                  | Button + neon/bid/trophy variants.                           |
+| `src/components/ui/badge.tsx`                   | Badge + neon/bid/roster/warning/success variants.            |
+| `src/components/ui/alert.tsx`                   | Alert + neon/live/warning/success variants.                  |
+| `src/components/ui/sonner.tsx`                  | Arena-styled dark toasts.                                    |
+| `src/components/ui/*`                           | Other shadcn primitives (Dialog, Sheet, Table, Tabs…).       |
+| `src/components/arena/index.ts`                 | Public barrel for TournyHub composites.                      |
+| `src/components/arena/auction-panel.tsx`        | The base glassy/neon panel wrapper.                          |
+| `src/components/arena/bid-controls.tsx`         | `<BidConsole>`.                                              |
+| `src/components/arena/team-chip.tsx`            | `<TeamChip>`.                                                |
+| `src/components/arena/player-row.tsx`           | `<PlayerRow>`.                                               |
+| `src/components/arena/live-badge.tsx`           | `<LiveBadge>`.                                               |
+| `src/components/arena/trophy.tsx`               | `<Trophy>` SVG.                                              |
+| `src/components/arena/arena-banner.tsx`         | `<ArenaBanner>` pennant.                                     |
+| `src/components/arena/credit-display.tsx`       | `<CreditDisplay>`.                                           |
+| `src/components/arena/live-auction-stage.tsx`   | `<LiveAuctionStage>`.                                        |
+| `src/components/arena/results-trophy.tsx`       | `<ResultsTrophy>`.                                           |
+| `src/components/arena/auction-hero.tsx`         | `<AuctionHero>`.                                             |
+| `src/components/arena/auction-status-card.tsx`  | `<AuctionStatusCard>`.                                       |
+| `src/components/arena/station-rail.tsx`         | `<StationRail>` + `<StationLamp>`.                           |
+| `src/components/arena/station-plate.tsx`        | `<StationPlate>` + `<StationGroup>`.                         |
+| `src/components/arena/stat-strip.tsx`           | `<Stat>` / `<StatStrip>`.                                    |
+| `src/components/arena/command-bar.tsx`          | `<CommandBar>`.                                              |
+| `src/components/ui/native-select.tsx`           | `<NativeSelect>` for choices that stay a real `<select>`.    |
+| `src/app/app/auctions/[id]/setup/layout.tsx`    | The Setup console shell: identity band, rail, gate bar.      |
+| `src/features/auctions/setup/setup-stations.ts` | Station list and the Readiness → lamp mapping.               |
+| `public/background.png`                         | The arena reference image.                                   |
 
 When adding a new surface:
 

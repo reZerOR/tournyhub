@@ -181,8 +181,10 @@ export async function getLiveSnapshot(
       max_per_team: number;
       min_per_team: number;
       position: number;
+      starting_price: number;
     }>(
-      `select "id", "label", "max_per_team", "min_per_team", "position"
+      `select "id", "label", "max_per_team", "min_per_team", "position",
+              "starting_price"
          from "tier" where "auction_id" = $1
         order by "position" asc`,
       [auctionId],
@@ -387,15 +389,21 @@ export async function getLiveSnapshot(
     tiers: tiers.map((tier) => ({ minPerTeam: tier.min_per_team })),
   });
 
-  const liveTiers: LiveTierProgress[] = progress.map((tier) => ({
-    biddableCount: tier.biddableCount,
-    complete: tier.offeredCount >= tier.biddableCount,
-    id: tier.id,
-    isActive: tier.id === auction.active_tier_id,
-    label: tier.label,
-    offeredCount: tier.offeredCount,
-    position: tier.position,
-  }));
+  const liveTiers: LiveTierProgress[] = progress.map((tier) => {
+    const matchingTier = tiers.find((t) => t.id === tier.id);
+    return {
+      biddableCount: tier.biddableCount,
+      complete: tier.offeredCount >= tier.biddableCount,
+      id: tier.id,
+      isActive: tier.id === auction.active_tier_id,
+      label: tier.label,
+      maxPerTeam: matchingTier?.max_per_team ?? 0,
+      minPerTeam: matchingTier?.min_per_team ?? 0,
+      offeredCount: tier.offeredCount,
+      position: tier.position,
+      startingPrice: matchingTier?.starting_price ?? 0,
+    };
+  });
   const nextTier = liveTiers.find((tier) => !tier.complete) ?? null;
 
   const round = openRound

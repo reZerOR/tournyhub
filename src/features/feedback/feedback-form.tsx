@@ -5,6 +5,14 @@ import { type FormEvent, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import {
   FEEDBACK_CATEGORIES,
@@ -58,20 +66,33 @@ export function FeedbackForm({ page }: { page?: string }) {
     <form className="flex flex-col gap-3" onSubmit={submit}>
       <Field className="max-w-xs">
         <FieldLabel htmlFor="feedback-category">Category</FieldLabel>
-        <select
-          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-          id="feedback-category"
-          onChange={(event) =>
-            setCategory(event.target.value as FeedbackCategory)
-          }
+        <Select
+          items={FEEDBACK_CATEGORIES.map((val) => ({
+            label: FEEDBACK_CATEGORY_LABELS[val],
+            value: val,
+          }))}
+          onValueChange={(val) => val && setCategory(val as FeedbackCategory)}
           value={category}
         >
-          {FEEDBACK_CATEGORIES.map((value) => (
-            <option key={value} value={value}>
-              {FEEDBACK_CATEGORY_LABELS[value]}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="w-full" id="feedback-category">
+            <SelectValue>
+              {(val: string | null) =>
+                val && val in FEEDBACK_CATEGORY_LABELS
+                  ? FEEDBACK_CATEGORY_LABELS[val as FeedbackCategory]
+                  : undefined
+              }
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {FEEDBACK_CATEGORIES.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {FEEDBACK_CATEGORY_LABELS[value]}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
       </Field>
 
       <Field data-invalid={Boolean(errorMessage)}>
