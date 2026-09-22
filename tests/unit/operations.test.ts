@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseEnvironment } from "@/config/environment";
+import { normalizeConnectionString } from "@/server/database/connection-string";
 import type { Queryable } from "@/server/database/queryable";
 import { checkHealth, environmentName } from "@/server/observability/health";
 import {
@@ -175,5 +176,26 @@ describe("environment separation", () => {
         PRODUCTION_DATABASE_URL: BASE_ENVIRONMENT.DATABASE_URL,
       }),
     ).not.toThrow();
+  });
+});
+
+describe("normalizeConnectionString", () => {
+  it("leaves local connection URLs unchanged", () => {
+    const local = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+    expect(normalizeConnectionString(local)).toBe(local);
+  });
+
+  it("adds sslmode=no-verify to Supabase URLs missing sslmode", () => {
+    const url =
+      "postgresql://postgres.ref:pass@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres";
+    expect(normalizeConnectionString(url)).toBe(`${url}?sslmode=no-verify`);
+  });
+
+  it("rewrites sslmode=require to sslmode=no-verify on Supabase hosts", () => {
+    const url =
+      "postgresql://postgres.ref:pass@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require";
+    expect(normalizeConnectionString(url)).toBe(
+      "postgresql://postgres.ref:pass@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=no-verify",
+    );
   });
 });
