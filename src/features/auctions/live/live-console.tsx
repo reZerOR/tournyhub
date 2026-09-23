@@ -55,6 +55,7 @@ import {
   cancelCloseAction,
   closeUnsoldPoolAction,
   completeAuctionAction,
+  directSaleAction,
   finalizeAction,
   loadEligiblePlayersAction,
   loadLivePlayerDetailsAction,
@@ -116,6 +117,9 @@ export function LiveConsole({
   const [returnReason, setReturnReason] = useState("");
   const [correctionReason, setCorrectionReason] = useState("");
   const [saleIdToReverse, setSaleIdToReverse] = useState("");
+  const [directSalePlayerId, setDirectSalePlayerId] = useState("");
+  const [directSaleTeamId, setDirectSaleTeamId] = useState("");
+  const [directSaleAmount, setDirectSaleAmount] = useState(0);
   const [detailsPlayer, setDetailsPlayer] = useState<LivePlayerDetails | null>(
     null,
   );
@@ -1447,6 +1451,10 @@ export function LiveConsole({
           correctionReason={correctionReason}
           currentBid={snapshot.currentBid}
           deficientTeamIds={snapshot.deficientTeamIds}
+          directSaleAmount={directSaleAmount}
+          directSalePlayerId={directSalePlayerId}
+          directSaleTeamId={directSaleTeamId}
+          eligiblePlayersForDirectSale={eligible ?? []}
           lifecycle={snapshot.lifecycle}
           nextTierId={snapshot.nextTierId}
           onActivateTier={(tierId) =>
@@ -1482,6 +1490,24 @@ export function LiveConsole({
             )
           }
           onCorrectionReasonChange={setCorrectionReason}
+          onDirectSale={() => {
+            void dispatch(
+              directSaleAction(auctionId, {
+                amount: directSaleAmount,
+                expectedRevision: snapshot.revision,
+                playerEntryId: directSalePlayerId,
+                reason: correctionReason,
+                teamId: directSaleTeamId,
+              }),
+            ).then(() => {
+              setDirectSalePlayerId("");
+              setDirectSaleTeamId("");
+              setDirectSaleAmount(0);
+            });
+          }}
+          onDirectSaleAmountChange={setDirectSaleAmount}
+          onDirectSalePlayerChange={setDirectSalePlayerId}
+          onDirectSaleTeamChange={setDirectSaleTeamId}
           onRequestMatching={() =>
             dispatch(
               requestMatchingAction(auctionId, {
@@ -1512,6 +1538,7 @@ export function LiveConsole({
           revision={snapshot.revision}
           rulesMode={snapshot.rulesMode}
           saleIdToReverse={saleIdToReverse}
+          teams={snapshot.teams}
           tiers={snapshot.tiers}
           unsoldPoolCount={snapshot.unsoldPoolCount}
           unsoldRound={unsoldRound}
