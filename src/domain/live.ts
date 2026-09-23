@@ -80,7 +80,7 @@ export const BID_REJECTION_MESSAGES: Record<BidRejectionReason, string> = {
   roster_max_reached: "Your Team has reached its maximum Roster size.",
   stale_revision: "The Auction changed. Refresh before bidding.",
   tier_max_reached: "Your Team has reached that Tier's maximum.",
-  wrong_amount: "That is not the exact next Bid.",
+  wrong_amount: "That Bid is below the minimum required amount.",
 };
 
 /** The stable reasons a close command is rejected. */

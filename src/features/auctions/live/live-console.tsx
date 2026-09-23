@@ -115,7 +115,10 @@ export function LiveConsole({
   const [returnReason, setReturnReason] = useState("");
   const [correctionReason, setCorrectionReason] = useState("");
   const [saleIdToReverse, setSaleIdToReverse] = useState("");
-  const [detailsPlayer, setDetailsPlayer] = useState<LivePlayerDetails | null>(null);
+  const [detailsPlayer, setDetailsPlayer] = useState<LivePlayerDetails | null>(
+    null,
+  );
+  const [customBidAmount, setCustomBidAmount] = useState("");
   const [pending, setPending] = useState(false);
   const [finished, setFinished] = useState(false);
   const [message, setMessage] = useState<null | string>(null);
@@ -401,6 +404,54 @@ export function LiveConsole({
     !snapshot.you.isLeader &&
     nextBid !== null;
 
+  const parsedCustom =
+    customBidAmount.trim() === "" ? null : Number(customBidAmount.trim());
+  const isCustomValidInteger =
+    parsedCustom !== null &&
+    !Number.isNaN(parsedCustom) &&
+    Number.isInteger(parsedCustom) &&
+    parsedCustom > 0 &&
+    String(parsedCustom) === customBidAmount.trim();
+  const isCustomBelowMin =
+    parsedCustom !== null && nextBid !== null && parsedCustom < nextBid;
+  const isCustomExceedingBudget =
+    parsedCustom !== null && parsedCustom > snapshot.you.remainingBudget;
+  const canSubmitCustom =
+    canBid &&
+    !pending &&
+    isCustomValidInteger &&
+    !isCustomBelowMin &&
+    !isCustomExceedingBudget;
+
+  const handlePlaceCustomBid = () => {
+    if (
+      !canSubmitCustom ||
+      parsedCustom === null ||
+      !activePlayer ||
+      !snapshot.you.teamId
+    ) {
+      return;
+    }
+    void dispatch(
+      placeBidAction(auctionId, {
+        amount: parsedCustom,
+        expectedRevision: snapshot.revision,
+        presentationId: activePlayer.presentationId,
+        teamId: snapshot.you.teamId,
+      }),
+    ).then(() => {
+      setCustomBidAmount("");
+    });
+  };
+
+  const handleAddChip = (increment: number) => {
+    const base =
+      parsedCustom !== null && parsedCustom >= (nextBid ?? 0)
+        ? parsedCustom
+        : (nextBid ?? 0);
+    setCustomBidAmount(String(base + increment));
+  };
+
   if (finished) {
     return (
       <Card>
@@ -414,7 +465,7 @@ export function LiveConsole({
         </CardHeader>
         <CardContent>
           <Link
-            className="text-sm underline font-semibold text-primary"
+            className="text-sm font-semibold text-primary underline"
             href={`/app/auctions/${auctionId}/results`}
           >
             Open Auction Results
@@ -435,7 +486,9 @@ export function LiveConsole({
     (p) => p.tierId === activeTier?.id,
   );
   const activePlayerInTier =
-    activePlayer && activePlayer.tierId === activeTier?.id ? activePlayer : null;
+    activePlayer && activePlayer.tierId === activeTier?.id
+      ? activePlayer
+      : null;
 
   const remainingTierPlayer =
     activePlayerInTier && unofferedInTier.length === 0
@@ -510,7 +563,9 @@ export function LiveConsole({
       </p>
 
       {/* Notifications & Error alerts */}
-      {message && <FieldError className="text-sm font-medium">{message}</FieldError>}
+      {message && (
+        <FieldError className="text-sm font-medium">{message}</FieldError>
+      )}
       {notice && (
         <p
           aria-live="polite"
@@ -522,17 +577,21 @@ export function LiveConsole({
       )}
 
       {/* Main 3-Column Arena Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         {/* Column 1: The Spotlight Stage & Bidding Controls (5 cols on lg, 5 on xl) */}
-        <div className="lg:col-span-6 xl:col-span-5 flex flex-col gap-5">
+        <div className="flex flex-col gap-5 lg:col-span-6 xl:col-span-5">
           {/* Main Stage Spotlight Card */}
           <Card className="relative overflow-hidden border-border/80 bg-card/90 shadow-xl">
-            <CardHeader className="pb-3 border-b border-border/50">
+            <CardHeader className="border-b border-border/50 pb-3">
               <div className="flex items-center justify-between gap-3">
-                <CardTitle aria-level={2} role="heading" className="text-xl sm:text-2xl font-bold tracking-tight">
+                <CardTitle
+                  aria-level={2}
+                  role="heading"
+                  className="text-xl font-bold tracking-tight sm:text-2xl"
+                >
                   {snapshot.lifecycle === "paused" ? "Paused" : "Live Auction"}
                 </CardTitle>
-                <span className="text-xs text-muted-foreground font-mono tabular-nums">
+                <span className="font-mono text-xs text-muted-foreground tabular-nums">
                   Revision {snapshot.revision}
                 </span>
               </div>
@@ -550,12 +609,13 @@ export function LiveConsole({
                   <div className="flex items-center gap-3.5">
                     <button
                       type="button"
-                      className="flex size-14 sm:size-16 items-center justify-center rounded-2xl font-display text-xl sm:text-2xl font-black shadow-md shrink-0 transition-transform cursor-pointer hover:scale-105 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex size-14 shrink-0 cursor-pointer items-center justify-center rounded-2xl font-display text-xl font-black shadow-md transition-transform hover:scale-105 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:size-16 sm:text-2xl"
                       onClick={() =>
                         setDetailsPlayer({
                           customFields: activePlayer.customFields ?? [],
                           displayName: activePlayer.displayName,
-                          externalPlayerId: activePlayer.externalPlayerId ?? null,
+                          externalPlayerId:
+                            activePlayer.externalPlayerId ?? null,
                           id: activePlayer.playerEntryId,
                           role: activePlayer.role,
                           startingPrice: activePlayer.startingPrice,
@@ -566,33 +626,40 @@ export function LiveConsole({
                         })
                       }
                       style={{
-                        backgroundColor: leadingTeam ? `${leadingTeamColor}20` : "rgba(var(--primary), 0.15)",
-                        borderColor: leadingTeam ? `${leadingTeamColor}70` : "var(--primary)",
+                        backgroundColor: leadingTeam
+                          ? `${leadingTeamColor}20`
+                          : "rgba(var(--primary), 0.15)",
+                        borderColor: leadingTeam
+                          ? `${leadingTeamColor}70`
+                          : "var(--primary)",
                         borderWidth: "2px",
-                        color: leadingTeam ? leadingTeamColor : "var(--primary)",
+                        color: leadingTeam
+                          ? leadingTeamColor
+                          : "var(--primary)",
                       }}
                       title="Click to view player details"
                     >
                       {activePlayer.displayName.charAt(0).toUpperCase()}
                     </button>
 
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <div className="flex min-w-0 flex-col">
+                      <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
                         Active Player
                       </span>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="text-xl sm:text-2xl lg:text-3xl font-display font-extrabold tracking-tight text-foreground truncate">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="truncate font-display text-xl font-extrabold tracking-tight text-foreground sm:text-2xl lg:text-3xl">
                           {activePlayer.displayName}
                         </h2>
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-6 px-2 text-[11px] rounded-lg gap-1 border-border/70 bg-muted/30 hover:bg-muted/60"
+                          className="h-6 gap-1 rounded-lg border-border/70 bg-muted/30 px-2 text-[11px] hover:bg-muted/60"
                           onClick={() =>
                             setDetailsPlayer({
                               customFields: activePlayer.customFields ?? [],
                               displayName: activePlayer.displayName,
-                              externalPlayerId: activePlayer.externalPlayerId ?? null,
+                              externalPlayerId:
+                                activePlayer.externalPlayerId ?? null,
                               id: activePlayer.playerEntryId,
                               role: activePlayer.role,
                               startingPrice: activePlayer.startingPrice,
@@ -622,27 +689,33 @@ export function LiveConsole({
 
                   {/* Countdown Readout (matches regex and attributes expected by tests) */}
                   {warningRemaining !== null && warningRemaining > 0 && (
-                    <p className="font-bold tabular-nums text-sm sm:text-base text-amber-400 animate-pulse">
+                    <p className="animate-pulse text-sm font-bold text-amber-400 tabular-nums sm:text-base">
                       Closing in {formatCountdown(warningRemaining)}
                     </p>
                   )}
 
-                  {closeRemaining !== null && closeRemaining > 0 && !finalizing && (
-                    <p className="font-bold tabular-nums text-sm sm:text-base text-primary">
-                      Timed Close in {formatCountdown(closeRemaining)}
-                    </p>
-                  )}
+                  {closeRemaining !== null &&
+                    closeRemaining > 0 &&
+                    !finalizing && (
+                      <p className="text-sm font-bold text-primary tabular-nums sm:text-base">
+                        Timed Close in {formatCountdown(closeRemaining)}
+                      </p>
+                    )}
 
                   {finalizing && (
-                    <p aria-live="assertive" className="font-bold text-sm sm:text-base text-emerald-400" role="status">
+                    <p
+                      aria-live="assertive"
+                      className="text-sm font-bold text-emerald-400 sm:text-base"
+                      role="status"
+                    >
                       Finalizing…
                     </p>
                   )}
 
                   {/* Price Board: 3 Elevated Columns */}
-                  <div className="grid grid-cols-3 gap-2 text-center pt-1">
-                    <div className="rounded-xl border border-border/60 bg-muted/20 p-2.5 flex flex-col gap-0.5">
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                  <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                    <div className="flex flex-col gap-0.5 rounded-xl border border-border/60 bg-muted/20 p-2.5">
+                      <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
                         Starting
                       </span>
                       <span className="font-mono text-base font-bold text-muted-foreground tabular-nums">
@@ -651,22 +724,29 @@ export function LiveConsole({
                     </div>
 
                     <div
-                      className="rounded-xl border p-2.5 flex flex-col gap-0.5 shadow-sm transition-all"
+                      className="flex flex-col gap-0.5 rounded-xl border p-2.5 shadow-sm transition-all"
                       style={{
-                        backgroundColor: leadingTeam ? `${leadingTeamColor}18` : "rgba(255,255,255,0.03)",
-                        borderColor: leadingTeam ? `${leadingTeamColor}60` : "var(--border)",
+                        backgroundColor: leadingTeam
+                          ? `${leadingTeamColor}18`
+                          : "rgba(255,255,255,0.03)",
+                        borderColor: leadingTeam
+                          ? `${leadingTeamColor}60`
+                          : "var(--border)",
                       }}
                     >
-                      <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider flex items-center justify-center gap-1">
+                      <span className="flex items-center justify-center gap-1 text-[10px] font-bold tracking-wider text-emerald-400 uppercase">
                         <Crown className="size-3 text-emerald-400" /> Current
                       </span>
-                      <span className="font-mono text-xl sm:text-2xl font-black text-foreground tabular-nums tracking-tight">
-                        {formatCredits(snapshot.currentBid?.amount ?? activePlayer.startingPrice)}
+                      <span className="font-mono text-xl font-black tracking-tight text-foreground tabular-nums sm:text-2xl">
+                        {formatCredits(
+                          snapshot.currentBid?.amount ??
+                            activePlayer.startingPrice,
+                        )}
                       </span>
                     </div>
 
-                    <div className="rounded-xl border border-border/60 bg-muted/20 p-2.5 flex flex-col gap-0.5">
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                    <div className="flex flex-col gap-0.5 rounded-xl border border-border/60 bg-muted/20 p-2.5">
+                      <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
                         Next Bid
                       </span>
                       <span className="font-mono text-base font-bold text-foreground tabular-nums">
@@ -679,14 +759,18 @@ export function LiveConsole({
                   <div
                     className="flex items-center justify-between gap-3 rounded-xl border p-3 transition-all"
                     style={{
-                      backgroundColor: leadingTeam ? `${leadingTeamColor}14` : "rgba(255,255,255,0.02)",
-                      borderColor: leadingTeam ? `${leadingTeamColor}50` : "var(--border)",
+                      backgroundColor: leadingTeam
+                        ? `${leadingTeamColor}14`
+                        : "rgba(255,255,255,0.02)",
+                      borderColor: leadingTeam
+                        ? `${leadingTeamColor}50`
+                        : "var(--border)",
                     }}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex min-w-0 items-center gap-2.5">
                       {leadingTeam ? (
                         <div
-                          className="flex size-9 items-center justify-center rounded-xl font-display text-xs font-bold shrink-0 shadow-xs"
+                          className="flex size-9 shrink-0 items-center justify-center rounded-xl font-display text-xs font-bold shadow-xs"
                           style={{
                             backgroundColor: `${leadingTeamColor}30`,
                             borderColor: `${leadingTeamColor}70`,
@@ -697,23 +781,25 @@ export function LiveConsole({
                           {(leadingTeam.name ?? "T").charAt(0).toUpperCase()}
                         </div>
                       ) : (
-                        <div className="flex size-9 items-center justify-center rounded-xl bg-muted text-muted-foreground shrink-0">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                           <Gavel className="size-4" />
                         </div>
                       )}
 
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <div className="flex min-w-0 flex-col">
+                        <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
                           Leading Team
                         </span>
-                        <span className="font-bold text-sm text-foreground truncate">
-                          {leadingTeam ? `${leadingTeam.name} (leading)` : "No Bids yet"}
+                        <span className="truncate text-sm font-bold text-foreground">
+                          {leadingTeam
+                            ? `${leadingTeam.name} (leading)`
+                            : "No Bids yet"}
                         </span>
                       </div>
                     </div>
 
                     {leadingTeam && (
-                      <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 shrink-0">
+                      <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-emerald-400">
                         <Trophy className="size-3.5 text-emerald-400" />
                         <span>Holding Lead</span>
                       </span>
@@ -721,11 +807,13 @@ export function LiveConsole({
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+                <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
                   <div className="flex size-12 items-center justify-center rounded-2xl bg-muted/40 text-muted-foreground">
                     <Gavel className="size-6" />
                   </div>
-                  <p className="text-sm font-semibold text-muted-foreground">No Active Player.</p>
+                  <p className="text-sm font-semibold text-muted-foreground">
+                    No Active Player.
+                  </p>
                   <p className="text-xs text-muted-foreground/70">
                     {lastCommittedSale
                       ? `Last Sale: ${lastCommittedSale.playerDisplayName} for ${lastCommittedSale.amount} cr.`
@@ -735,39 +823,61 @@ export function LiveConsole({
               )}
 
               {/* Status bar details */}
-              <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs border-t border-border/50 pt-3 text-muted-foreground">
+              <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-border/50 pt-3 text-xs text-muted-foreground">
                 <span>
-                  Lifecycle: <span className="capitalize font-semibold text-foreground">{snapshot.lifecycle}</span>
+                  Lifecycle:{" "}
+                  <span className="font-semibold text-foreground capitalize">
+                    {snapshot.lifecycle}
+                  </span>
                 </span>
                 <span>
                   Connection:{" "}
-                  <span className={connectionStale ? "text-destructive font-bold" : "text-emerald-400 font-medium"}>
+                  <span
+                    className={
+                      connectionStale
+                        ? "font-bold text-destructive"
+                        : "font-medium text-emerald-400"
+                    }
+                  >
                     {connectionStale ? "Reconnecting…" : "Live"}
                   </span>
                 </span>
                 <span>
                   Controls:{" "}
-                  <span className={controlsReady ? "text-emerald-400 font-medium" : "text-destructive font-bold"}>
+                  <span
+                    className={
+                      controlsReady
+                        ? "font-medium text-emerald-400"
+                        : "font-bold text-destructive"
+                    }
+                  >
                     {controlsReady ? "Ready" : "Unavailable"}
                   </span>
                 </span>
                 <span>
                   Current price:{" "}
-                  <span className="tabular-nums font-semibold font-mono text-foreground">
-                    {snapshot.currentBid?.amount ?? activePlayer?.startingPrice ?? "—"}
+                  <span className="font-mono font-semibold text-foreground tabular-nums">
+                    {snapshot.currentBid?.amount ??
+                      activePlayer?.startingPrice ??
+                      "—"}
                   </span>
                 </span>
                 <span>
-                  Leading: {leadingTeam ? `${leadingTeam.name} (leading)` : "No Bids"}
+                  Leading:{" "}
+                  {leadingTeam ? `${leadingTeam.name} (leading)` : "No Bids"}
                 </span>
                 <span>
-                  Next Bid: <span className="tabular-nums font-semibold font-mono text-foreground">{nextBid ?? "—"}</span>
+                  Next Bid:{" "}
+                  <span className="font-mono font-semibold text-foreground tabular-nums">
+                    {nextBid ?? "—"}
+                  </span>
                 </span>
               </div>
 
               {snapshot.lifecycle === "paused" && (
-                <p className="text-xs text-amber-400/90 font-medium bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5">
-                  The Auction is paused. Bidding is suspended. The Active Player and the leading Bid are preserved.
+                <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-2.5 text-xs font-medium text-amber-400/90">
+                  The Auction is paused. Bidding is suspended. The Active Player
+                  and the leading Bid are preserved.
                 </p>
               )}
             </CardContent>
@@ -777,7 +887,11 @@ export function LiveConsole({
           {role === "representative" && (
             <Card className="border-border/80 bg-card/90 shadow-lg">
               <CardHeader className="pb-3">
-                <CardTitle aria-level={2} role="heading" className="text-lg font-bold">
+                <CardTitle
+                  aria-level={2}
+                  role="heading"
+                  className="text-lg font-bold"
+                >
                   Your Team
                 </CardTitle>
                 <CardDescription>
@@ -785,28 +899,104 @@ export function LiveConsole({
                   {snapshot.you.rosterCount}/{snapshot.you.maxRoster}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col gap-3">
+              <CardContent className="flex flex-col gap-3.5">
                 {canBid ? (
-                  <Button
-                    className="h-13 text-base sm:text-lg font-bold shadow-lg transition-transform active:scale-[0.98]"
-                    disabled={pending}
-                    onClick={() =>
-                      dispatch(
-                        placeBidAction(auctionId, {
-                          amount: nextBid!,
-                          expectedRevision: snapshot.revision,
-                          presentationId: activePlayer!.presentationId,
-                          teamId: snapshot.you.teamId!,
-                        }),
-                      )
-                    }
-                    type="button"
-                  >
-                    {pending && <Spinner className="mr-2" />}
-                    Bid {nextBid}
-                  </Button>
+                  <>
+                    <Button
+                      className="h-13 text-base font-bold shadow-lg transition-transform active:scale-[0.98] sm:text-lg"
+                      disabled={pending}
+                      onClick={() =>
+                        dispatch(
+                          placeBidAction(auctionId, {
+                            amount: nextBid!,
+                            expectedRevision: snapshot.revision,
+                            presentationId: activePlayer!.presentationId,
+                            teamId: snapshot.you.teamId!,
+                          }),
+                        )
+                      }
+                      type="button"
+                    >
+                      {pending && <Spinner className="mr-2" />}
+                      Bid {nextBid}
+                    </Button>
+
+                    <div className="flex flex-col gap-2 rounded-xl border border-border/70 bg-muted/20 p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                          Custom Jump Bid
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          Min:{" "}
+                          <span className="font-mono font-bold text-foreground">
+                            {nextBid} cr
+                          </span>
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {[100, 500, 1000, 2500].map((inc) => (
+                          <button
+                            key={inc}
+                            type="button"
+                            onClick={() => handleAddChip(inc)}
+                            disabled={pending}
+                            className="cursor-pointer rounded-lg border border-border/80 bg-background/80 px-2.5 py-1 font-mono text-xs font-medium text-foreground transition-all hover:bg-muted/80 active:scale-95 disabled:opacity-50"
+                          >
+                            +{inc.toLocaleString()}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          step="1"
+                          min={nextBid ?? 1}
+                          value={customBidAmount}
+                          onChange={(e) => setCustomBidAmount(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && canSubmitCustom) {
+                              e.preventDefault();
+                              handlePlaceCustomBid();
+                            }
+                          }}
+                          placeholder={`Min: ${nextBid}`}
+                          disabled={pending}
+                          className={cn(
+                            "h-10 font-mono text-sm",
+                            (isCustomBelowMin || isCustomExceedingBudget) &&
+                              "border-destructive focus-visible:ring-destructive",
+                          )}
+                        />
+
+                        <Button
+                          type="button"
+                          disabled={!canSubmitCustom}
+                          onClick={handlePlaceCustomBid}
+                          className="h-10 shrink-0 px-4 font-semibold"
+                          variant="secondary"
+                        >
+                          {pending && <Spinner className="mr-1.5" />}
+                          Bid Custom
+                        </Button>
+                      </div>
+
+                      {isCustomBelowMin && (
+                        <p className="text-[11px] font-medium text-amber-400">
+                          Minimum bid is now {nextBid} cr.
+                        </p>
+                      )}
+                      {isCustomExceedingBudget && (
+                        <p className="text-[11px] font-medium text-destructive">
+                          Exceeds your remaining Budget (
+                          {snapshot.you.remainingBudget} cr).
+                        </p>
+                      )}
+                    </div>
+                  </>
                 ) : (
-                  <div className="rounded-xl bg-muted/30 border border-border/50 p-3 text-center text-xs sm:text-sm text-muted-foreground font-medium">
+                  <div className="rounded-xl border border-border/50 bg-muted/30 p-3 text-center text-xs font-medium text-muted-foreground sm:text-sm">
                     {connectionStale
                       ? "Reconnecting before bidding is available…"
                       : snapshot.lifecycle === "paused"
@@ -826,12 +1016,18 @@ export function LiveConsole({
           {showRemainingResolution && (
             <div className="flex flex-col gap-3 rounded-2xl border border-primary/40 bg-primary/10 p-4 shadow-sm">
               <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+                <span className="text-xs font-semibold tracking-wider text-primary uppercase">
                   Last Player in {activeTier.label}
                 </span>
                 <p className="text-sm font-medium">
-                  <span className="font-bold">{remainingTierPlayer.displayName}</span> is the last Player in this Tier,
-                  and only <span className="font-bold">{soleEligibleTeam.name ?? "Team"}</span> remains eligible.
+                  <span className="font-bold">
+                    {remainingTierPlayer.displayName}
+                  </span>{" "}
+                  is the last Player in this Tier, and only{" "}
+                  <span className="font-bold">
+                    {soleEligibleTeam.name ?? "Team"}
+                  </span>{" "}
+                  remains eligible.
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Choose how to assign this Player to complete the Tier:
@@ -883,11 +1079,16 @@ export function LiveConsole({
           {role === "organizer" && (
             <Card className="border-border/80 bg-card/90 shadow-md">
               <CardHeader className="pb-3">
-                <CardTitle aria-level={2} role="heading" className="text-lg font-bold">
+                <CardTitle
+                  aria-level={2}
+                  role="heading"
+                  className="text-lg font-bold"
+                >
                   Organizer controls
                 </CardTitle>
                 <CardDescription>
-                  Select the next Player, control closing, and pause or resume the Auction.
+                  Select the next Player, control closing, and pause or resume
+                  the Auction.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
@@ -906,7 +1107,7 @@ export function LiveConsole({
                       type="button"
                       variant="secondary"
                     >
-                      <Pause className="size-3.5 mr-1" /> Pause Auction
+                      <Pause className="mr-1 size-3.5" /> Pause Auction
                     </Button>
                   ) : (
                     <Button
@@ -921,19 +1122,36 @@ export function LiveConsole({
                       size="sm"
                       type="button"
                     >
-                      <Play className="size-3.5 mr-1" /> Resume Auction
+                      <Play className="mr-1 size-3.5" /> Resume Auction
                     </Button>
                   )}
 
                   {activePlayer &&
                     snapshot.closeMode === "manual" &&
-                    snapshot.lifecycle === "live" && (
-                      !activePlayer.warningDeadline ? (
+                    snapshot.lifecycle === "live" &&
+                    (!activePlayer.warningDeadline ? (
+                      <Button
+                        disabled={pending}
+                        onClick={() =>
+                          dispatch(
+                            beginCloseAction(auctionId, {
+                              expectedRevision: snapshot.revision,
+                              presentationId: activePlayer.presentationId,
+                            }),
+                          )
+                        }
+                        size="sm"
+                        type="button"
+                      >
+                        Start 3-second close
+                      </Button>
+                    ) : (
+                      <>
                         <Button
                           disabled={pending}
                           onClick={() =>
                             dispatch(
-                              beginCloseAction(auctionId, {
+                              cancelCloseAction(auctionId, {
                                 expectedRevision: snapshot.revision,
                                 presentationId: activePlayer.presentationId,
                               }),
@@ -941,44 +1159,26 @@ export function LiveConsole({
                           }
                           size="sm"
                           type="button"
+                          variant="secondary"
                         >
-                          Start 3-second close
+                          Cancel warning
                         </Button>
-                      ) : (
-                        <>
-                          <Button
-                            disabled={pending}
-                            onClick={() =>
-                              dispatch(
-                                cancelCloseAction(auctionId, {
-                                  expectedRevision: snapshot.revision,
-                                  presentationId: activePlayer.presentationId,
-                                }),
-                              )
-                            }
-                            size="sm"
-                            type="button"
-                            variant="secondary"
-                          >
-                            Cancel warning
-                          </Button>
-                          <Button
-                            disabled={pending}
-                            onClick={() =>
-                              dispatch(
-                                finalizeAction(auctionId, {
-                                  presentationId: activePlayer.presentationId,
-                                }),
-                              )
-                            }
-                            size="sm"
-                            type="button"
-                          >
-                            Finalize now
-                          </Button>
-                        </>
-                      )
-                    )}
+                        <Button
+                          disabled={pending}
+                          onClick={() =>
+                            dispatch(
+                              finalizeAction(auctionId, {
+                                presentationId: activePlayer.presentationId,
+                              }),
+                            )
+                          }
+                          size="sm"
+                          type="button"
+                        >
+                          Finalize now
+                        </Button>
+                      </>
+                    ))}
                 </div>
 
                 {/* Offer Next Player Selection (shadcn Select) */}
@@ -995,12 +1195,15 @@ export function LiveConsole({
                       onValueChange={(val) => setSelectedPlayerId(val ?? "")}
                       value={selectedPlayerId}
                     >
-                      <SelectTrigger className="w-full h-9 text-xs" id="live-player">
+                      <SelectTrigger
+                        className="h-9 w-full text-xs"
+                        id="live-player"
+                      >
                         <SelectValue placeholder="Choose a Player">
                           {(val: string | null) =>
                             val
-                              ? ((eligible ?? []).find((p) => p.id === val)?.displayName ??
-                                val)
+                              ? ((eligible ?? []).find((p) => p.id === val)
+                                  ?.displayName ?? val)
                               : undefined
                           }
                         </SelectValue>
@@ -1048,7 +1251,7 @@ export function LiveConsole({
                     type="button"
                     variant="secondary"
                   >
-                    <Shuffle className="size-3.5 mr-1" /> Random Player
+                    <Shuffle className="mr-1 size-3.5" /> Random Player
                   </Button>
                 </div>
 
@@ -1068,7 +1271,9 @@ export function LiveConsole({
                       />
                     </Field>
                     <Button
-                      disabled={pending || !returnReason.trim() || !!snapshot.currentBid}
+                      disabled={
+                        pending || !returnReason.trim() || !!snapshot.currentBid
+                      }
                       onClick={() =>
                         dispatch(
                           returnPlayerAction(auctionId, {
@@ -1082,7 +1287,7 @@ export function LiveConsole({
                       type="button"
                       variant="secondary"
                     >
-                      <RotateCcw className="size-3.5 mr-1" /> Return Player
+                      <RotateCcw className="mr-1 size-3.5" /> Return Player
                     </Button>
                   </div>
                 )}
@@ -1092,7 +1297,7 @@ export function LiveConsole({
         </div>
 
         {/* Column 2: Live Bidding Chat / Activity Stream (4 cols on lg, 4 on xl) */}
-        <div className="lg:col-span-6 xl:col-span-4 flex flex-col gap-4">
+        <div className="flex flex-col gap-4 lg:col-span-6 xl:col-span-4">
           <LiveBiddingChat
             activePlayer={activePlayer}
             bids={bidsList}
@@ -1100,21 +1305,26 @@ export function LiveConsole({
             currentBid={snapshot.currentBid}
             finalizing={finalizing}
             lastSale={lastCommittedSale}
+            nextBidAmount={nextBid}
             teams={snapshot.teams}
             warningRemaining={warningRemaining}
           />
         </div>
 
         {/* Column 3: Teams & Squad Rosters War Room (12 cols on lg, 3 on xl) */}
-        <div className="lg:col-span-12 xl:col-span-3 flex flex-col gap-4">
+        <div className="flex flex-col gap-4 lg:col-span-12 xl:col-span-3">
           <Card className="border-border/80 bg-card/90 shadow-md">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
-                <CardTitle aria-level={2} role="heading" className="text-lg font-bold flex items-center gap-2">
+                <CardTitle
+                  aria-level={2}
+                  role="heading"
+                  className="flex items-center gap-2 text-lg font-bold"
+                >
                   <Users className="size-4 text-neon" />
                   Teams
                 </CardTitle>
-                <span className="text-xs font-mono text-muted-foreground tabular-nums">
+                <span className="font-mono text-xs text-muted-foreground tabular-nums">
                   {snapshot.teams.length} teams
                 </span>
               </div>
@@ -1144,9 +1354,9 @@ export function LiveConsole({
                       }}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
                           <span
-                            className="flex size-6 items-center justify-center rounded-md text-[11px] font-bold shrink-0"
+                            className="flex size-6 shrink-0 items-center justify-center rounded-md text-[11px] font-bold"
                             style={{
                               backgroundColor: `${color}25`,
                               color,
@@ -1154,14 +1364,14 @@ export function LiveConsole({
                           >
                             {(team.name ?? "T").charAt(0).toUpperCase()}
                           </span>
-                          <span className="font-semibold text-xs truncate">
+                          <span className="truncate text-xs font-semibold">
                             {team.name ?? "Unnamed"}
                             {team.isLeader ? " (leading)" : ""}
                           </span>
                         </div>
 
                         {team.isLeader && (
-                          <span className="shrink-0 text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                          <span className="flex shrink-0 items-center gap-1 text-[10px] font-bold text-emerald-400">
                             <Crown className="size-3" />
                             Leading
                           </span>
@@ -1169,36 +1379,44 @@ export function LiveConsole({
                       </div>
 
                       {/* Text exact match for test: "Roster X · Spent Y · Remaining Z" */}
-                      <span className="text-muted-foreground tabular-nums text-xs">
-                        Roster {team.rosterCount} · Spent {team.spentCredits} · Remaining {team.remainingBudget}
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        Roster {team.rosterCount} · Spent {team.spentCredits} ·
+                        Remaining {team.remainingBudget}
                       </span>
 
                       {/* Visual Acquired Players Chips (User Request #4) */}
                       {players.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-1 border-t border-border/40">
+                        <div className="flex flex-wrap gap-1 border-t border-border/40 pt-1">
                           {players.map((p) => (
                             <button
                               key={p.id}
                               type="button"
                               onClick={async () => {
-                                const details = await loadLivePlayerDetailsAction(
-                                  auctionId,
-                                  p.id,
-                                );
+                                const details =
+                                  await loadLivePlayerDetailsAction(
+                                    auctionId,
+                                    p.id,
+                                  );
                                 if (details) setDetailsPlayer(details);
                               }}
-                              className="inline-flex items-center gap-1 rounded-md bg-muted/40 border border-border/50 px-2 py-0.5 text-[10px] text-foreground font-medium hover:bg-muted/70 cursor-pointer transition-colors"
+                              className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-foreground transition-colors hover:bg-muted/70"
                               title="Click to view player details"
                             >
                               <span
-                                className="size-1.5 rounded-full shrink-0"
+                                className="size-1.5 shrink-0 rounded-full"
                                 style={{ backgroundColor: color }}
                               />
-                              <span className="truncate max-w-[100px]">{p.name}</span>
+                              <span className="max-w-[100px] truncate">
+                                {p.name}
+                              </span>
                               {p.amount > 0 ? (
-                                <span className="font-mono text-muted-foreground">{p.amount}cr</span>
+                                <span className="font-mono text-muted-foreground">
+                                  {p.amount}cr
+                                </span>
                               ) : (
-                                <span className="text-primary text-[9px]">Rep</span>
+                                <span className="text-[9px] text-primary">
+                                  Rep
+                                </span>
                               )}
                             </button>
                           ))}
