@@ -578,12 +578,13 @@ export async function directSale(
       }
     }
 
-    // Insert the Direct Sale.
+    // Insert the Direct Sale. presentation_id is intentionally omitted:
+    // the column is nullable (see migration 20260922130002) because a Direct
+    // Sale bypasses the normal bidding flow and has no player_presentation row.
     const inserted = await client.query<{ id: string }>(
       `insert into "sale"
-          ("auction_id", "player_entry_id", "team_id", "amount", "source",
-           "presentation_id")
-       values ($1, $2, $3, $4, 'direct', null)
+          ("auction_id", "player_entry_id", "team_id", "amount", "source")
+       values ($1, $2, $3, $4, 'direct')
        returning "id"`,
       [input.auctionId, input.playerEntryId, input.teamId, input.amount],
     );
