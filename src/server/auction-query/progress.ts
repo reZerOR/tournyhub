@@ -278,7 +278,7 @@ export async function loadOpenSales(
     display_name: string;
     id: string;
     player_entry_id: string;
-    source: "bid" | "forced";
+    source: "bid" | "direct" | "forced";
     team_id: string;
     tier_id: null | string;
   }>(
