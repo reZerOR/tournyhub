@@ -168,7 +168,7 @@ Components are `base` style (Base UI primitives, not Radix). Style:
 | `<CreditDisplay>`      | Whole-number Credit display. Always monospace, always suffixed `cr`.       |
 | `<LiveAuctionStage>`   | The whole Live Auction layout: trophy + active player + bid + lists.       |
 | `<ResultsTrophy>`      | Completed Auction layout: trophy, champion, final standings.               |
-| `<AuctionHero>`        | The full-bleed arena landing surface on `/` and `/auctions/[id]/ready`.    |
+| `<AuctionHero>`        | The full-bleed arena surface used for auction readiness.                   |
 | `<AuctionStatusCard>`  | The auction list card on `/auctions`. One rail color per lifecycle state.  |
 | `<StationRail>`        | The ordered station list of a multi-step Operate surface.                  |
 | `<StationRailItem>`    | One station row: readiness lamp, label, open-requirement count.            |
@@ -284,9 +284,15 @@ The composition of the system: which composite lives on which page.
 
 ### 3.1 Landing (`/`)
 
-`AuctionHero` over `public/background.png`. Trophy centered, three
-`<ArenaBanner>` pennants ("Teams", "Bid", "Players"), single `<Button
-variant="neon" size="xl">` CTA to sign in.
+Sports-campaign landing page with original stadium and team-huddle photography.
+Barlow Condensed headlines pair with Geist body text. Scoped `landing-*` styles
+use deep navy, cobalt actions, and light-blue headline accents without changing
+the authenticated app's tokens. Sections cover sports, setup, auction features,
+and common questions; all primary actions lead to `/app/auctions/new`.
+Native disclosure controls and a keyboard-accessible mobile navigation keep
+the page lightweight. Entry motion respects reduced-motion preferences.
+The favicon and Apple touch icon use a simplified version of the blue T shield.
+See `docs/design/landing-assets.md` for image provenance.
 
 ### 3.2 Sign-in / Invitations
 

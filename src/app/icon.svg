@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320">
+  <title>TournyHub</title>
+  <rect width="320" height="320" rx="64" fill="#09101f"/>
+  <g transform="translate(24 24) scale(.85)">
+    <path d="M16 26H304L286 68H196V266L170 286L144 266V68H34Z" fill="#2462ff"/>
+    <path d="M103 26H196V196L144 144V68Z" fill="#63c8ff"/>
+    <path d="M144 144L196 196V266L170 286L144 266Z" fill="#12358e"/>
+    <path d="M69 89H121V255L69 221Z" fill="#2462ff"/>
+    <path d="M219 89H271V221L219 255Z" fill="#63c8ff"/>
+  </g>
+</svg>
