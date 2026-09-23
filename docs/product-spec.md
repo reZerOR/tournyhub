@@ -152,6 +152,8 @@ Completed results are available to the Organizer and Team Representatives. They 
 
 The Organizer's Results CSV includes every supplied Player phone number. A Team Representative's Results CSV includes phone numbers only for Players on that Team's Roster. The PDF omits phone numbers for every role. Access by a Platform Administrator requires a moderation reason and Audit Entry.
 
+Results group Players beneath centered Team headings with their Team colors. Excel downloads preserve the colors and centered headings; CSV downloads use plain Team sections. Each Team has a Copy roster action and a PDF download, both without phone numbers. The Organizer can download a Team's Excel or CSV contact roster; a Team Representative can download contact rosters only for their own Team. Team-specific export URLs narrow the server-authorized results and reject unavailable Teams. All downloaded formats record an Audit Entry.
+
 ## Interface requirements
 
 The application uses a permanent dark appearance, responsive desktop and mobile layouts, English copy, local-time display, and UTC storage. It uses a neutral sports control-room style with indigo primary actions, green completed states, amber closing warnings, red destructive or rejected states, and Team colors as identifiers only.

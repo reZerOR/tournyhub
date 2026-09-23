@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
+import ExcelJS from "exceljs";
 
 import type { AuctionResultsView } from "@/domain/results";
+import { teamRosterText } from "@/domain/results";
+import {
+  buildResultsWorkbook,
+  scopeResultsExport,
+} from "@/server/import-export/results-spreadsheet";
 import { createTextPdf } from "@/server/import-export/pdf-writer";
 import {
   buildResultsCsv,
@@ -82,6 +88,7 @@ describe("buildResultsCsv", () => {
       teams: [
         {
           id: "t-reds",
+          color: null,
           name: "Reds",
           players: [
             {
@@ -110,6 +117,7 @@ describe("buildResultsCsv", () => {
         },
         {
           id: "t-blues",
+          color: null,
           name: "Blues",
           players: [
             {
@@ -136,6 +144,103 @@ describe("buildResultsCsv", () => {
         },
       ],
     },
+  });
+
+  it("groups CSV rosters under team headings without dropping representatives", () => {
+    const { csv, rowCount } = buildResultsCsv(base);
+    expect(csv.indexOf('"Reds","",""')).toBeLessThan(
+      csv.indexOf('"Reds","Rep One"'),
+    );
+    expect(csv.indexOf('"Reds","Alice"')).toBeLessThan(
+      csv.indexOf('"Blues","",""'),
+    );
+    expect(rowCount).toBe(3);
+  });
+
+  it("narrows exports to one team and rejects forged contact scopes", () => {
+    const scoped = scopeResultsExport(base, "t-reds", "csv")!;
+    expect(buildResultsCsv(scoped).csv).not.toContain("Bob");
+    expect(buildResultsPdf(scoped).pdf.toString("latin1")).not.toContain("Bob");
+    const representative = {
+      ...base,
+      viewerRole: "representative" as const,
+      viewerTeamId: "t-reds",
+    };
+    for (const format of ["csv", "xlsx"] as const) {
+      expect(scopeResultsExport(representative, "t-blues", format)).toBeNull();
+      expect(
+        scopeResultsExport(representative, "t-reds", format),
+      ).not.toBeNull();
+    }
+    expect(scopeResultsExport(representative, "t-blues", "pdf")).not.toBeNull();
+    expect(scopeResultsExport(base, "missing", "pdf")).toBeNull();
+    expect(scopeResultsExport(base, "", "csv")).toBeNull();
+  });
+
+  it("writes centered colored Excel headings and literal phone/name cells", async () => {
+    const colored = structuredClone(base);
+    colored.results.teams[0]!.color = "#00ffff";
+    colored.results.teams[0]!.players[0]!.displayName = "=1+1";
+    const exported = await buildResultsWorkbook(colored);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(exported.workbook as unknown as ExcelJS.Buffer);
+    const sheet = workbook.worksheets[0]!;
+    const cells: ExcelJS.Cell[] = [];
+    sheet.eachRow((row) => row.eachCell((cell) => cells.push(cell)));
+    const title = cells.find((cell) => cell.value === "Reds" && cell.isMerged)!;
+    expect(title.alignment.horizontal).toBe("center");
+    expect(title.fill).toMatchObject({ fgColor: { argb: "FF00ffff" } });
+    const formulaName = cells.find((cell) => cell.value === "=1+1")!;
+    expect(formulaName.type).toBe(ExcelJS.ValueType.String);
+    expect(cells.some((cell) => cell.value === "+880111")).toBe(true);
+    expect(
+      cells.some((cell) => cell.value === 10 && cell.numFmt.includes("cr")),
+    ).toBe(true);
+    expect(exported.rowCount).toBe(3);
+    expect(exported.phoneNumberCount).toBe(2);
+    const own = await buildResultsWorkbook({
+      ...base,
+      viewerRole: "representative",
+      viewerTeamId: "t-reds",
+    });
+    const ownBook = new ExcelJS.Workbook();
+    await ownBook.xlsx.load(own.workbook as unknown as ExcelJS.Buffer);
+    expect(
+      JSON.stringify(ownBook.worksheets[0]!.getSheetValues()),
+    ).not.toContain("Bob");
+    expect(own.phoneNumberCount).toBe(1);
+  });
+
+  it("copies the selected roster without any phone numbers or other teams", () => {
+    const copied = teamRosterText(
+      base.title,
+      base.results.teams[0]!,
+      base.rulesMode,
+    );
+    expect(copied).toContain("1. Rep One");
+    expect(copied).toContain("2. Alice");
+    expect(copied).not.toContain("Bob");
+    expect(copied).not.toContain("880");
+  });
+
+  it("repeats team and column headings when a PDF roster spans pages", () => {
+    const large = structuredClone(base);
+    const team = large.results.teams[0]!;
+    team.players = Array.from({ length: 80 }, (_, index) => ({
+      ...team.players[1]!,
+      displayName: `Player ${index}`,
+      playerEntryId: `p-${index}`,
+    }));
+    team.rosterCount = 80;
+    const text = buildResultsPdf(large).pdf.toString("latin1");
+    expect(text).toContain("Reds \\(continued\\)");
+    expect(text.match(/\(PLAYER\)/g)!.length).toBeGreaterThan(2);
+    expect(text).toContain("Player 79");
+    expect(text).not.toContain("Champion");
+    expect(text).not.toContain("880");
+    expect(text.slice(Number(text.match(/startxref\n(\d+)/)![1]), -1)).toMatch(
+      /^xref/,
+    );
   });
 
   it("gives the Organizer every supplied phone number including unassigned Players", () => {
@@ -198,6 +303,7 @@ describe("buildResultsCsv", () => {
         teams: [
           {
             id: "t-reds",
+            color: null,
             name: "Reds",
             players: [
               {
@@ -243,6 +349,7 @@ describe("buildResultsPdf", () => {
         teams: [
           {
             id: "t-reds",
+            color: null,
             name: "Reds",
             players: [
               {
@@ -269,9 +376,13 @@ describe("buildResultsPdf", () => {
       const text = buildResultsPdf({ ...withPhones, viewerRole }).pdf.toString(
         "latin1",
       );
+      // The phone number must never appear in the PDF.
       expect(text).not.toContain("8801112223");
-      expect(text).toContain("(  Alice - Bid 10)");
-      expect(text).toContain("(Reds - Roster 1");
+      // Player name and team name must appear.
+      expect(text).toContain("Alice");
+      expect(text).toContain("Reds");
+      // The bid amount must appear.
+      expect(text).toContain("10");
     }
   });
 });
