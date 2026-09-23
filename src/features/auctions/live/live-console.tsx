@@ -74,6 +74,7 @@ import { LiveBiddingChat } from "./live-bidding-chat";
 import { LiveHeaderBar } from "./live-header-bar";
 import { LiveOrganizerTools } from "./live-organizer-tools";
 import { LivePlayerDetailsDialog } from "./live-player-details-dialog";
+import { LivePlayersPanel } from "./live-players-panel";
 import { formatCredits, getTeamColor } from "./live-theme";
 
 const POLL_INTERVAL_MS = 2000;
@@ -575,6 +576,13 @@ export function LiveConsole({
           {notice}
         </p>
       )}
+
+      <LivePlayersPanel
+        players={snapshot.players}
+        tiers={snapshot.tiers}
+        teams={snapshot.teams}
+        connectionStale={connectionStale}
+      />
 
       {/* Main 3-Column Arena Grid */}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
