@@ -37,6 +37,8 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   if (typeof candidate.closest !== "function") return false;
   if (candidate.closest('[contenteditable="true"]')) return true;
   if (candidate.closest('[role="dialog"]')) return true;
+  if (candidate.closest('[role="combobox"]')) return true;
+  if (candidate.closest('[role="listbox"]')) return true;
   return false;
 }
 

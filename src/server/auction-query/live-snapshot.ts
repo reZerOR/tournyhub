@@ -24,6 +24,7 @@ import {
   loadUnsoldPool,
 } from "@/server/auction-query/progress";
 import type { Queryable } from "@/server/database/queryable";
+import { loadLivePlayers } from "./live-players";
 
 export function isMobileField(label: string): boolean {
   const normalized = label.trim().toLowerCase();
@@ -458,10 +459,11 @@ export async function getLiveSnapshot(
       })
     : null;
 
-  const [progress, openRound, pool] = await Promise.all([
+  const [progress, openRound, pool, players] = await Promise.all([
     loadTierProgress(db, auctionId),
     loadOpenUnsoldRound(db, auctionId),
     loadUnsoldPool(db, auctionId, 0),
+    loadLivePlayers(db, auctionId),
   ]);
 
   const orderedTierIds = tiers.map((tier) => tier.id);
@@ -537,6 +539,7 @@ export async function getLiveSnapshot(
       nextBidAmount: nextBid,
       nextTierId: nextTier?.id ?? null,
       openSales,
+      players,
       revision: auction.revision,
       rulesMode: auction.rules_mode,
       serverTime: timeResult.rows[0]!.now.toISOString(),
@@ -631,4 +634,3 @@ export async function getLivePlayerDetails(
     tierLabel: row.tier_label,
   };
 }
-

@@ -21,6 +21,7 @@ function snapshot(overrides: Partial<LiveSnapshot> = {}): LiveSnapshot {
     nextBidAmount: 10,
     nextTierId: null,
     openSales: [],
+    players: [],
     rejections: [],
     revision: 1,
     rulesMode: "simple",
@@ -100,6 +101,10 @@ describe("isEditableTarget", () => {
       true,
     );
     expect(isEditableTarget(element("BUTTON", ['[role="dialog"]']))).toBe(true);
+    expect(isEditableTarget(element("BUTTON", ['[role="combobox"]']))).toBe(
+      true,
+    );
+    expect(isEditableTarget(element("DIV", ['[role="listbox"]']))).toBe(true);
   });
 
   it("leaves ordinary elements, non-elements, and null alone", () => {
@@ -130,6 +135,14 @@ describe("shortcutActionFor", () => {
     ).toBeNull();
     expect(shortcutActionFor({ key: "Enter", target: null })).toBeNull();
     expect(shortcutActionFor({ key: "z", target: null })).toBeNull();
+    for (const role of ["combobox", "listbox"]) {
+      expect(
+        shortcutActionFor({
+          key: "p",
+          target: element("DIV", [`[role="${role}"]`]),
+        }),
+      ).toBeNull();
+    }
   });
 });
 

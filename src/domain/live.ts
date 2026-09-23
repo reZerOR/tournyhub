@@ -239,6 +239,23 @@ export interface LiveRosterPlayer {
   tierId: null | string;
 }
 
+/** Public, contact-free player directory included in authorized live snapshots. */
+export interface LivePlayerSummary {
+  id: string;
+  displayName: string;
+  tierId: null | string;
+  status:
+    | "waiting"
+    | "active"
+    | "sold"
+    | "forced"
+    | "preassigned"
+    | "unsold"
+    | "final_unsold";
+  teamId: null | string;
+  amount: null | number;
+}
+
 export interface LiveTeamPublicState {
   color: null | string;
   id: string;
@@ -362,6 +379,7 @@ export interface LiveSnapshot {
   nextTierId: null | string;
   /** Unreversed Sales the Organizer may reverse while Paused. */
   openSales: LiveSale[];
+  players: LivePlayerSummary[];
   revision: number;
   rulesMode: RulesMode;
   serverTime: string;
