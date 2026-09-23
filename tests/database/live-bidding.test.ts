@@ -74,7 +74,7 @@ describe("placeBid", () => {
 
     const wrongAmount = await placeBid(pool, {
       actorUserId: fixture.redsRepUserId,
-      amount: 15,
+      amount: 5,
       auctionId: fixture.auctionId,
       commandId: commandId(),
       expectedRevision: await revision(fixture.auctionId),
@@ -311,5 +311,55 @@ describe("placeBid", () => {
       [presentationId],
     );
     expect(count.rows[0]!.count).toBe(1);
+  });
+
+  it("accepts a custom jump bid and calculates the next minimum bid from it", async () => {
+    const fixture = await buildLiveAuction("bid-custom-jump");
+    const presentationId = await presentFirstPlayer(fixture);
+
+    // Opening custom jump bid: starting price is 10, bid 25
+    const outcome = await placeBid(pool, {
+      actorUserId: fixture.redsRepUserId,
+      amount: 25,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      presentationId,
+      teamId: fixture.redsTeamId,
+    });
+    expect(outcome.status).toBe("accepted");
+    if (outcome.status === "accepted") {
+      expect(outcome.result.amount).toBe(25);
+    }
+
+    // Next minimum bid must be 25 + 5 = 30. A bid of 28 is rejected as wrong_amount.
+    const belowMin = await placeBid(pool, {
+      actorUserId: fixture.bluesRepUserId,
+      amount: 28,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      presentationId,
+      teamId: fixture.bluesTeamId,
+    });
+    expect(belowMin).toMatchObject({
+      reason: "wrong_amount",
+      status: "rejected",
+    });
+
+    // A bid of 35 (valid jump) is accepted.
+    const validJump = await placeBid(pool, {
+      actorUserId: fixture.bluesRepUserId,
+      amount: 35,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      presentationId,
+      teamId: fixture.bluesTeamId,
+    });
+    expect(validJump.status).toBe("accepted");
+    if (validJump.status === "accepted") {
+      expect(validJump.result.amount).toBe(35);
+    }
   });
 });

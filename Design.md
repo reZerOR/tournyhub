@@ -322,9 +322,17 @@ and Paused state use `<Alert variant="warning">` or `live`.
 
 ### 3.5 Completed Auction (`/auctions/[id]/results`)
 
-`<ResultsTrophy>` — large `<Trophy>` with arena-pulse animation, Champion
-Team name in neon, final standings table inside `<AuctionPanel
-tone="trophy">`. Export buttons use `variant="trophy"`.
+Results use centered Team headings above moderate-density roster tables. Each
+Team's stored color appears in a thin top strip and a tinted heading background;
+names stay in the foreground color for contrast. Roster counts, spent Credits,
+remaining Credits, and Tier counts sit between the heading and the Player rows.
+On mobile, Source and Tier move beneath the Player name so Credits remain visible.
+
+Team navigation links jump to each roster. The footer holds Copy roster, PDF,
+and authorized Excel/CSV downloads. Excel preserves centered, colored Team
+headings; CSV uses plain Team sections. PDFs use light printable sheets, repeated
+Team headings on overflow, and aligned tables. Copy and PDF omit phone numbers.
+Team order is setup order and must not imply standings or a Champion.
 
 ### 3.6 Organizer setup (`/auctions/new`, `/auctions/[id]/setup/*`)
 

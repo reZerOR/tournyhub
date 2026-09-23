@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { RulesMode } from "@/domain/auction";
-import type { LiveSnapshot } from "@/domain/live";
+import type { LivePlayerDetails, LiveSnapshot } from "@/domain/live";
 import {
   beginManualClose,
   cancelManualClose,
@@ -33,7 +33,11 @@ import {
   startUnsoldRound,
 } from "@/server/auction-command/tier-progress";
 import { resolveRemainingTierPlayer } from "@/server/auction-command/tier-resolution";
-import { getLiveSnapshot } from "@/server/auction-query/live-snapshot";
+import {
+  getLivePlayerDetails,
+  getLiveSnapshot,
+  resolveLiveRole,
+} from "@/server/auction-query/live-snapshot";
 import { loadOpenUnsoldRound } from "@/server/auction-query/progress";
 import { getCurrentSession } from "@/server/auth/session";
 import { getPool } from "@/server/database/pool";
@@ -479,3 +483,17 @@ export async function resolveRemainingTierPlayerAction(
       : undefined,
   );
 }
+
+export async function loadLivePlayerDetailsAction(
+  auctionId: string,
+  playerEntryId: string,
+): Promise<LivePlayerDetails | null> {
+  const session = await getCurrentSession();
+  if (!session) return null;
+
+  const role = await resolveLiveRole(getPool(), session.user.id, auctionId);
+  if (!role) return null;
+
+  return getLivePlayerDetails(getPool(), auctionId, playerEntryId);
+}
+

@@ -68,6 +68,8 @@ export interface ResultsPlayerRow {
 
 export interface ResultsTeamView {
   id: string;
+  /** Team hex color e.g. `#1a2b3c`, or null when unset. */
+  color: null | string;
   name: null | string;
   players: ResultsPlayerRow[];
   remainingBudget: number;
@@ -137,7 +139,7 @@ export function exportFileName({
   extension,
 }: {
   auctionTitle: string;
-  extension: "csv" | "pdf";
+  extension: "csv" | "pdf" | "xlsx";
 }): string {
   const safe = auctionTitle
     .trim()
@@ -145,4 +147,39 @@ export function exportFileName({
     .replace(/\s+/g, "-")
     .slice(0, 60);
   return `${safe || "auction"}-results.${extension}`;
+}
+
+export const RESULTS_SOURCE_LABELS: Record<ResultsSource, string> = {
+  bid: "Bid",
+  forced: "Forced Assignment",
+  representative: "Player Representative",
+};
+
+export function resultsTeamColor(color: null | string): string {
+  return color && /^#[0-9a-f]{6}$/i.test(color) ? color : "#64748b";
+}
+
+/** Shareable roster text deliberately excludes all contact information. */
+export function teamRosterText(
+  title: string,
+  team: ResultsTeamView,
+  rulesMode: AuctionResultsView["rulesMode"],
+): string {
+  return [
+    team.name ?? "Unnamed Team",
+    title,
+    `${team.rosterCount} players | Spent: ${team.spentCredits.toLocaleString("en-US")} cr | Remaining: ${team.remainingBudget.toLocaleString("en-US")} cr`,
+    "",
+    ...team.players.map((player, index) =>
+      [
+        `${index + 1}. ${player.displayName}`,
+        ...(rulesMode === "tiered" ? [player.tierLabel ?? "Unassigned"] : []),
+        RESULTS_SOURCE_LABELS[player.source],
+        ...(player.source === "representative"
+          ? []
+          : [`${player.amount.toLocaleString("en-US")} cr`]),
+      ].join(" | "),
+    ),
+    ...(team.players.length ? [] : ["No players acquired."]),
+  ].join("\n");
 }

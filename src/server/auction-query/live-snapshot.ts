@@ -3,8 +3,12 @@ import {
   isLiveStatus,
   nextBidAmount,
   type LiveActivePlayer,
+  type LiveBidItem,
   type LiveBidRejection,
   type LiveCallerPrivateState,
+  type LiveCustomFieldValue,
+  type LivePlayerDetails,
+  type LiveRosterPlayer,
   type LiveSnapshot,
   type LiveTeamPublicState,
   type LiveTierProgress,
@@ -21,6 +25,17 @@ import {
 } from "@/server/auction-query/progress";
 import type { Queryable } from "@/server/database/queryable";
 
+export function isMobileField(label: string): boolean {
+  const normalized = label.trim().toLowerCase();
+  return (
+    normalized.includes("phone") ||
+    normalized.includes("mobile") ||
+    normalized.includes("cell") ||
+    normalized.includes("whatsapp") ||
+    normalized.includes("contact number")
+  );
+}
+
 interface AuctionRow {
   active_tier_id: null | string;
   close_mode: CloseMode;
@@ -33,6 +48,7 @@ interface AuctionRow {
 interface PresentationRow {
   close_deadline: Date | null;
   display_name: string;
+  external_player_id: null | string;
   id: string;
   player_entry_id: string;
   role: null | string;
@@ -53,6 +69,8 @@ interface TeamRow {
 
 interface BidRow {
   amount: number;
+  id: string;
+  server_time: Date;
   team_id: string;
 }
 
@@ -161,6 +179,7 @@ export async function getLiveSnapshot(
       `select pp."id", pp."player_entry_id", pp."tier_id", pp."starting_price",
               pp."selection_method", pp."state", pp."warning_deadline",
               pp."close_deadline", pe."display_name", pe."role",
+              pe."external_player_id",
               t."label" as tier_label
          from "player_presentation" pp
          join "player_entry" pe on pe."id" = pp."player_entry_id"
@@ -200,6 +219,9 @@ export async function getLiveSnapshot(
     bidResult,
     rejectionResult,
     timeResult,
+    openSales,
+    playerRepsResult,
+    activeCustomFieldsResult,
   ] = await Promise.all([
     db.query<{
       team_id: string;
@@ -231,9 +253,9 @@ export async function getLiveSnapshot(
     ),
     presentation
       ? db.query<BidRow>(
-          `select "amount", "team_id" from "bid_attempt"
+          `select "id", "amount", "team_id", "server_time" from "bid_attempt"
               where "presentation_id" = $1 and "status" = 'accepted'
-              order by "amount" desc limit 1`,
+              order by "server_time" asc, "amount" asc`,
           [presentation.id],
         )
       : Promise.resolve({ rows: [] as BidRow[] }),
@@ -248,6 +270,30 @@ export async function getLiveSnapshot(
         )
       : Promise.resolve({ rows: [] as RejectionRow[] }),
     db.query<{ now: Date }>(`select now() as now`),
+    loadOpenSales(db, auctionId),
+    db.query<{
+      display_name: string;
+      id: string;
+      team_id: string;
+      tier_id: null | string;
+    }>(
+      `select pe."id", pe."display_name", pe."team_id", pe."tier_id"
+         from "player_entry" pe
+        where pe."auction_id" = $1 and pe."is_representative" and pe."team_id" is not null`,
+      [auctionId],
+    ),
+    presentation
+      ? db.query<{ id: string; label: string; value: string }>(
+          `select cpf."id", cpf."label", pecv."value"
+             from "player_entry_custom_value" pecv
+             join "custom_player_field" cpf on cpf."id" = pecv."custom_player_field_id"
+            where pecv."player_entry_id" = $1
+            order by cpf."created_at" asc, cpf."id" asc`,
+          [presentation.player_entry_id],
+        )
+      : Promise.resolve({
+          rows: [] as { id: string; label: string; value: string }[],
+        }),
   ]);
 
   const spendByTeam = new Map(
@@ -261,16 +307,48 @@ export async function getLiveSnapshot(
     tierCountsByTeam.set(row.team_id, counts);
   }
 
-  const currentBid = bidResult.rows[0] ?? null;
-  const leaderTeamId = currentBid?.team_id ?? null;
+  const bids: LiveBidItem[] = bidResult.rows.map((row) => ({
+    amount: row.amount,
+    id: row.id,
+    serverTime: row.server_time.toISOString(),
+    teamId: row.team_id,
+  }));
+  const currentBid = bids.length > 0 ? bids[bids.length - 1]! : null;
+  const leaderTeamId = currentBid?.teamId ?? null;
 
   const teams: LiveTeamPublicState[] = teamsResult.rows.map((team) => {
     const spend = spendByTeam.get(team.id);
+    const rep = playerRepsResult.rows.find((r) => r.team_id === team.id);
+    const teamSales = openSales.filter((s) => s.teamId === team.id);
+    const players: LiveRosterPlayer[] = [
+      ...(rep
+        ? [
+            {
+              amount: 0,
+              id: rep.id,
+              isRepresentative: true,
+              name: rep.display_name,
+              source: "preassigned" as const,
+              tierId: rep.tier_id,
+            },
+          ]
+        : []),
+      ...teamSales.map((s) => ({
+        amount: s.amount,
+        id: s.playerEntryId,
+        isRepresentative: false,
+        name: s.playerDisplayName,
+        source: s.source,
+        tierId: s.tierId,
+      })),
+    ];
+
     return {
       color: team.color,
       id: team.id,
       isLeader: team.id === leaderTeamId,
       name: team.name,
+      players,
       position: team.position,
       remainingBudget: Math.max(0, 0),
       rosterCount: 0,
@@ -333,12 +411,22 @@ export async function getLiveSnapshot(
       serverTime: row.server_time.toISOString(),
     }));
 
+  const customFields: LiveCustomFieldValue[] = activeCustomFieldsResult.rows
+    .filter((row) => !isMobileField(row.label))
+    .map((row) => ({
+      id: row.id,
+      label: row.label,
+      value: row.value,
+    }));
+
   const activePlayer: LiveActivePlayer | null = presentation
     ? {
         closeDeadline: presentation.close_deadline
           ? presentation.close_deadline.toISOString()
           : null,
+        customFields,
         displayName: presentation.display_name,
+        externalPlayerId: presentation.external_player_id,
         presentationId: presentation.id,
         playerEntryId: presentation.player_entry_id,
         role: presentation.role,
@@ -370,11 +458,10 @@ export async function getLiveSnapshot(
       })
     : null;
 
-  const [progress, openRound, pool, openSales] = await Promise.all([
+  const [progress, openRound, pool] = await Promise.all([
     loadTierProgress(db, auctionId),
     loadOpenUnsoldRound(db, auctionId),
     loadUnsoldPool(db, auctionId, 0),
-    loadOpenSales(db, auctionId),
   ]);
 
   const orderedTierIds = tiers.map((tier) => tier.id);
@@ -439,9 +526,10 @@ export async function getLiveSnapshot(
       activePlayer,
       activeTierId: auction.active_tier_id,
       auctionId,
+      bids,
       closeMode: auction.close_mode,
       currentBid: currentBid
-        ? { amount: currentBid.amount, teamId: currentBid.team_id }
+        ? { amount: currentBid.amount, teamId: currentBid.teamId }
         : null,
       deficientTeamIds: deficient,
       eligiblePlayerCount: eligible.rows[0]?.count ?? 0,
@@ -467,3 +555,80 @@ export async function getLiveSnapshot(
     teamId: role.teamId,
   };
 }
+
+/**
+ * Loads full player details for live view (active lot, queue, or roster).
+ * Excludes sensitive fields like mobile/phone number.
+ */
+export async function getLivePlayerDetails(
+  db: Queryable,
+  auctionId: string,
+  playerEntryId: string,
+): Promise<LivePlayerDetails | null> {
+  const result = await db.query<{
+    display_name: string;
+    external_player_id: null | string;
+    id: string;
+    is_representative: boolean;
+    role: null | string;
+    starting_price_override: null | number;
+    team_color: null | string;
+    team_id: null | string;
+    team_name: null | string;
+    tier_id: null | string;
+    tier_label: null | string;
+    tier_starting_price: null | number;
+  }>(
+    `select pe."id", pe."display_name", pe."role", pe."external_player_id",
+            pe."starting_price_override", pe."is_representative", pe."tier_id",
+            t."label" as tier_label, t."starting_price" as tier_starting_price,
+            coalesce(s."team_id", pe."team_id") as team_id,
+            tm."name" as team_name, tm."color" as team_color
+       from "player_entry" pe
+       left join "tier" t on t."id" = pe."tier_id"
+       left join "sale" s on s."player_entry_id" = pe."id" and s."reversed_at" is null
+       left join "team" tm on tm."id" = coalesce(s."team_id", pe."team_id")
+      where pe."id" = $1 and pe."auction_id" = $2
+      limit 1`,
+    [playerEntryId, auctionId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+
+  const customResult = await db.query<{
+    id: string;
+    label: string;
+    value: string;
+  }>(
+    `select cpf."id", cpf."label", pecv."value"
+       from "player_entry_custom_value" pecv
+       join "custom_player_field" cpf on cpf."id" = pecv."custom_player_field_id"
+      where pecv."player_entry_id" = $1
+      order by cpf."created_at" asc, cpf."id" asc`,
+    [playerEntryId],
+  );
+
+  const customFields: LiveCustomFieldValue[] = customResult.rows
+    .filter((f) => !isMobileField(f.label))
+    .map((f) => ({
+      id: f.id,
+      label: f.label,
+      value: f.value,
+    }));
+
+  return {
+    customFields,
+    displayName: row.display_name,
+    externalPlayerId: row.external_player_id,
+    id: row.id,
+    isRepresentative: row.is_representative,
+    role: row.role,
+    startingPrice:
+      row.starting_price_override ?? row.tier_starting_price ?? null,
+    teamColor: row.team_color,
+    teamName: row.team_name,
+    tierId: row.tier_id,
+    tierLabel: row.tier_label,
+  };
+}
+

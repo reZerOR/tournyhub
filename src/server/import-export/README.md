@@ -4,6 +4,13 @@ Owns Player Entry import validation and authorized Auction Results generation.
 It must not edit authoritative records itself; the import commit belongs to the
 Auction Command module.
 
+Results exports use the caller-filtered read model. `results-spreadsheet.ts`
+groups CSV rows by Team and builds styled XLSX workbooks with literal string
+cells, centered Team headings, and numeric Credits. Its Team filter may narrow
+an export but cannot grant access to another Team's contact roster. PDFs and
+clipboard roster text never include phone numbers. The export route records
+counts for CSV, XLSX, and PDF downloads without storing contact values.
+
 `player-import-file.ts` reads an uploaded CSV or XLSX into plain string
 worksheets. It decides the format from the file name and confirms it against
 the bytes, so a renamed file cannot pick a different parser: a CSV must be

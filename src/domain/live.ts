@@ -1,4 +1,5 @@
 import type { CloseMode, RulesMode } from "@/domain/auction";
+export type { CloseMode, RulesMode };
 
 /** The lifecycle states in which the live consoles are available. */
 export const LIVE_STATUSES = ["live", "paused"] as const;
@@ -79,7 +80,7 @@ export const BID_REJECTION_MESSAGES: Record<BidRejectionReason, string> = {
   roster_max_reached: "Your Team has reached its maximum Roster size.",
   stale_revision: "The Auction changed. Refresh before bidding.",
   tier_max_reached: "Your Team has reached that Tier's maximum.",
-  wrong_amount: "That is not the exact next Bid.",
+  wrong_amount: "That Bid is below the minimum required amount.",
 };
 
 /** The stable reasons a close command is rejected. */
@@ -229,16 +230,46 @@ export interface LiveBidRejection {
   serverTime: string;
 }
 
+export interface LiveRosterPlayer {
+  amount: number;
+  id: string;
+  isRepresentative?: boolean;
+  name: string;
+  source: "bid" | "forced" | "preassigned";
+  tierId: null | string;
+}
+
 export interface LiveTeamPublicState {
   color: null | string;
   id: string;
   isLeader: boolean;
   name: null | string;
+  players?: LiveRosterPlayer[];
   position: number;
   remainingBudget: number;
   rosterCount: number;
   spentCredits: number;
   tierCounts: Record<string, number>;
+}
+
+export interface LiveCustomFieldValue {
+  id?: string;
+  label: string;
+  value: string;
+}
+
+export interface LivePlayerDetails {
+  customFields: LiveCustomFieldValue[];
+  displayName: string;
+  externalPlayerId: null | string;
+  id: string;
+  isRepresentative?: boolean;
+  role: null | string;
+  startingPrice: null | number;
+  teamColor?: null | string;
+  teamName?: null | string;
+  tierId: null | string;
+  tierLabel: null | string;
 }
 
 export interface LiveActivePlayer {
@@ -247,7 +278,9 @@ export interface LiveActivePlayer {
    * A browser countdown must be derived from this and never from its own clock.
    */
   closeDeadline: null | string;
+  customFields?: LiveCustomFieldValue[];
   displayName: string;
+  externalPlayerId?: null | string;
   presentationId: string;
   playerEntryId: string;
   role: null | string;
@@ -305,10 +338,18 @@ export interface LiveCallerPrivateState {
   tierLimits: Record<string, { max: number; min: number }>;
 }
 
+export interface LiveBidItem {
+  amount: number;
+  id: string;
+  serverTime: string;
+  teamId: string;
+}
+
 export interface LiveSnapshot {
   activePlayer: LiveActivePlayer | null;
   activeTierId: null | string;
   auctionId: string;
+  bids?: LiveBidItem[];
   closeMode: CloseMode;
   currentBid: null | { amount: number; teamId: string };
   /** Teams that still miss a required total or Tier minimum. */

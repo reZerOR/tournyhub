@@ -232,11 +232,12 @@ export async function getResultsForCaller(
   const budget = budgetResult.rows[0]?.budget ?? 0;
 
   const teamsResult = await db.query<{
+    color: null | string;
     id: string;
     name: null | string;
     position: number;
   }>(
-    `select "id", "name", "position" from "team"
+    `select "id", "name", "position", "color" from "team"
       where "auction_id" = $1
       order by "position" asc, "created_at" asc, "id" asc`,
     [auctionId],
@@ -309,6 +310,7 @@ export async function getResultsForCaller(
   for (const team of teamsResult.rows) {
     byTeam.set(team.id, {
       id: team.id,
+      color: team.color,
       name: team.name,
       players: [],
       remainingBudget: budget,

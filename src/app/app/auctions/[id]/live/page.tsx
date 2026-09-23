@@ -20,7 +20,7 @@ export default async function LiveAuctionPage({
   if (!access) notFound();
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-[1720px] flex-col gap-6 px-3 sm:px-6 lg:px-8 py-3 sm:py-6">
       <LiveConsole
         auctionId={id}
         initialSnapshot={access.snapshot}

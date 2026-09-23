@@ -300,7 +300,8 @@ export async function placeBid(
     let reason: BidRejectionReason | null = null;
     if (currentBid && currentBid.teamId === input.teamId)
       reason = "already_leading";
-    else if (amount !== next) reason = "wrong_amount";
+    else if (!Number.isInteger(amount) || amount < next)
+      reason = "wrong_amount";
     else if (state.spent + amount > (rules.budget ?? 0))
       reason = "insufficient_budget";
     else if (

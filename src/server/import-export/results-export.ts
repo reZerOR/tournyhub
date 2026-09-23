@@ -1,20 +1,18 @@
 import {
   exportFileName,
-  formatCsv,
+  RESULTS_SOURCE_LABELS,
   type AuctionResultsView,
-  type ResultsPlayerRow,
+  type ResultsTeamView,
 } from "@/domain/results";
 import { writeAuditEntry } from "@/server/auction-command/live-command";
-import { createTextPdf } from "@/server/import-export/pdf-writer";
+import { buildGroupedResultsCsv } from "@/server/import-export/results-spreadsheet";
+import {
+  createStyledPdf,
+  type PdfBlock,
+} from "@/server/import-export/pdf-writer";
 import type { Queryable } from "@/server/database/queryable";
 
 export { exportFileName };
-
-const SOURCE_LABELS: Record<ResultsPlayerRow["source"], string> = {
-  bid: "Bid",
-  forced: "Forced Assignment",
-  representative: "Player Representative",
-};
 
 export interface ResultsCsvExport {
   csv: string;
@@ -22,9 +20,19 @@ export interface ResultsCsvExport {
   rowCount: number;
 }
 
-function phoneCount(rows: readonly (readonly string[])[]): number {
-  // The phone column is the last one in both exports.
-  return rows.filter((row) => (row[row.length - 1] ?? "").length > 0).length;
+/**
+ * Derives a human-readable tier summary from a player list, using tierLabel
+ * rather than the raw tier UUID keys in tierCounts.
+ */
+function buildTierSummary(players: ResultsTeamView["players"]): string {
+  const counts = new Map<string, number>();
+  for (const p of players) {
+    const label = p.tierLabel ?? "Unassigned";
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([label, count]) => `${label}: ${count}`)
+    .join(", ");
 }
 
 /**
@@ -37,72 +45,7 @@ function phoneCount(rows: readonly (readonly string[])[]): number {
  * prefixes.
  */
 export function buildResultsCsv(view: AuctionResultsView): ResultsCsvExport {
-  const header = ["Team", "Player", "Source", "Amount", "Phone"];
-  const rows: string[][] = [header];
-  const phoneByPlayerId = new Map(
-    view.contacts.map((contact) => [
-      contact.playerEntryId,
-      contact.phoneNumber,
-    ]),
-  );
-
-  if (view.viewerRole === "representative") {
-    const team = view.results.teams.find(
-      (candidate) => candidate.id === view.viewerTeamId,
-    );
-    for (const player of team?.players ?? []) {
-      rows.push([
-        team?.name ?? "Unnamed Team",
-        player.displayName,
-        SOURCE_LABELS[player.source],
-        player.source === "representative" ? "" : String(player.amount),
-        phoneByPlayerId.get(player.playerEntryId) ?? "",
-      ]);
-    }
-    return {
-      csv: formatCsv(rows),
-      phoneNumberCount: phoneCount(rows.slice(1)),
-      rowCount: rows.length - 1,
-    };
-  }
-
-  const placementByPlayerId = new Map<
-    string,
-    { amount: string; source: string }
-  >();
-  for (const team of view.results.teams) {
-    for (const player of team.players) {
-      placementByPlayerId.set(player.playerEntryId, {
-        amount: player.source === "representative" ? "" : String(player.amount),
-        source: SOURCE_LABELS[player.source],
-      });
-    }
-  }
-  for (const unsold of view.results.unsold) {
-    placementByPlayerId.set(unsold.playerEntryId, {
-      amount: "",
-      source:
-        unsold.resolution === "final_unsold" ? "Final Unsold" : "Unsold Pool",
-    });
-  }
-
-  for (const contact of view.contacts) {
-    const placement = placementByPlayerId.get(contact.playerEntryId);
-    rows.push([
-      contact.teamName ?? "Unassigned",
-      contact.displayName,
-      placement?.source ??
-        (contact.isRepresentative ? "Representative" : "Unassigned"),
-      placement?.amount ?? "",
-      phoneByPlayerId.get(contact.playerEntryId) ?? "",
-    ]);
-  }
-
-  return {
-    csv: formatCsv(rows),
-    phoneNumberCount: phoneCount(rows.slice(1)),
-    rowCount: rows.length - 1,
-  };
+  return buildGroupedResultsCsv(view);
 }
 
 export interface ResultsPdfExport {
@@ -115,47 +58,109 @@ export interface ResultsPdfExport {
  * role, so a shared document cannot expose private contact data.
  */
 export function buildResultsPdf(view: AuctionResultsView): ResultsPdfExport {
-  const lines: string[] = [
-    `${view.title || "Auction"} - Results`,
-    `Status: ${view.status}`,
-    "",
-  ];
+  const hasTiers = view.rulesMode === "tiered";
+  const totalPlayers = view.results.teams.reduce(
+    (s, t) => s + t.rosterCount,
+    0,
+  );
+  const totalSpent = view.results.teams.reduce((s, t) => s + t.spentCredits, 0);
 
-  for (const team of view.results.teams) {
-    const tierSummary = Object.entries(team.tierCounts)
-      .map(
-        ([key, count]) =>
-          `${key === "unassigned" ? "Unassigned" : key}: ${count}`,
-      )
-      .join(", ");
-    lines.push(
-      `${team.name ?? "Unnamed Team"} - Roster ${team.rosterCount}, Spent ${team.spentCredits}, Remaining ${team.remainingBudget}`,
-    );
-    if (tierSummary) lines.push(`  Tiers: ${tierSummary}`);
-    for (const player of team.players) {
-      lines.push(
-        `  ${player.displayName} - ${
+  // ── Document sections ─────────────────────────────────────────────────────
+
+  const blocks: PdfBlock[] = [];
+
+  // Cover header
+  blocks.push({ kind: "title", text: view.title || "Auction Results" });
+  blocks.push({
+    kind: "subtitle",
+    text: `${view.rulesMode.charAt(0).toUpperCase()}${view.rulesMode.slice(1)} rules | Status: ${view.status.charAt(0).toUpperCase()}${view.status.slice(1)}`,
+  });
+  blocks.push({ kind: "rule" });
+  blocks.push({ kind: "blank" });
+
+  // Overall summary
+  blocks.push({
+    kind: "summary",
+    cols: ["Teams", "Total Players", "Total Spent"],
+    row: [
+      String(view.results.teams.length),
+      String(totalPlayers),
+      `${totalSpent.toLocaleString()} cr`,
+    ],
+  });
+  blocks.push({ kind: "blank" });
+  // Keep the first roster with the overview; later Teams begin fresh sheets.
+  for (const [index, team] of view.results.teams.entries()) {
+    if (index > 0) blocks.push({ kind: "pageBreak" });
+    blocks.push({
+      kind: "teamBanner",
+      text: team.name ?? "Unnamed Team",
+      color: team.color,
+      subtitle: view.title || "Auction Results",
+    });
+    blocks.push({
+      kind: "summary",
+      cols: ["Players", "Spent", "Remaining"],
+      row: [
+        String(team.rosterCount),
+        `${team.spentCredits.toLocaleString("en-US")} cr`,
+        `${team.remainingBudget.toLocaleString("en-US")} cr`,
+      ],
+    });
+    const tierSummary = buildTierSummary(team.players);
+    if (hasTiers && tierSummary)
+      blocks.push({ kind: "kv", label: "Tiers", value: tierSummary });
+    blocks.push({ kind: "blank" });
+    blocks.push({ kind: "columns", hasTiers });
+    if (!team.players.length)
+      blocks.push({ kind: "subtitle", text: "No players acquired." });
+
+    // Player rows
+    for (const [idx, player] of team.players.entries()) {
+      blocks.push({
+        kind: "player",
+        index: idx + 1,
+        name: player.displayName,
+        source: RESULTS_SOURCE_LABELS[player.source],
+        amount:
           player.source === "representative"
-            ? SOURCE_LABELS.representative
-            : `${SOURCE_LABELS[player.source]} ${player.amount}`
-        }`,
-      );
+            ? "-"
+            : `${player.amount.toLocaleString()} cr`,
+        ...(hasTiers ? { tier: player.tierLabel ?? "Unassigned" } : {}),
+      });
     }
-    lines.push("");
+
+    blocks.push({ kind: "blank" });
+    blocks.push({ kind: "rule" });
+    blocks.push({ kind: "blank" });
   }
 
+  // Unsold section
   if (view.results.unsold.length > 0) {
-    lines.push("Unsold Players");
+    blocks.push({ kind: "heading", text: "Unsold Players", color: null });
     for (const unsold of view.results.unsold) {
-      lines.push(
-        `  ${unsold.displayName} - ${
-          unsold.resolution === "final_unsold" ? "Final Unsold" : "Unsold Pool"
-        }`,
-      );
+      blocks.push({
+        kind: "unsold",
+        name: unsold.displayName,
+        resolution:
+          unsold.resolution === "final_unsold" ? "Final Unsold" : "Unsold Pool",
+      });
     }
+    blocks.push({ kind: "blank" });
+    blocks.push({ kind: "rule" });
+    blocks.push({ kind: "blank" });
   }
 
-  return { lineCount: lines.length, pdf: createTextPdf(lines) };
+  // Footer note
+  blocks.push({
+    kind: "footer",
+    text: "Phone numbers are never included in this PDF. Download the CSV for contact details.",
+  });
+
+  return {
+    lineCount: blocks.length,
+    pdf: createStyledPdf(blocks),
+  };
 }
 
 /**
@@ -175,7 +180,7 @@ export async function recordResultsExport(
   }: {
     actorUserId: string;
     auctionId: string;
-    format: "csv" | "pdf";
+    format: "csv" | "pdf" | "xlsx";
     phoneNumberCount: number;
     rowCount: number;
     viewerRole: "organizer" | "representative";
