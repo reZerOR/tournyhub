@@ -400,3 +400,259 @@ export async function reverseSale(
     client.release();
   }
 }
+
+export interface DirectSaleInput {
+  actorUserId: string;
+  auctionId: string;
+  commandId: string;
+  expectedRevision: number;
+  /** Positive integer Credits to deduct from the Team Budget. */
+  amount: number;
+  playerEntryId: string;
+  reason: string;
+  teamId: string;
+}
+
+export interface DirectSaleResult {
+  amount: number;
+  playerEntryId: string;
+  saleId: string;
+  teamId: string;
+}
+
+/**
+ * Assigns a pre-registered Player to a named Team at a custom Credit amount
+ * while the Auction is Paused, bypassing the bidding process. All Budget,
+ * Roster, Tier, and Legal Completion constraints still apply. The resulting
+ * Sale is reversible through the normal Sale Reversal flow.
+ */
+export async function directSale(
+  pool: Pool,
+  input: DirectSaleInput,
+): Promise<LiveCommandOutcome<DirectSaleResult>> {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const opened = await prelude<DirectSaleResult>(client, input);
+    if ("failure" in opened) {
+      await client.query("rollback");
+      return opened.failure;
+    }
+    const { auction } = opened;
+
+    // Validate amount before any DB reads.
+    if (!Number.isInteger(input.amount) || input.amount < 1) {
+      await client.query("rollback");
+      return reject("invalid_amount", auction.revision);
+    }
+
+    // Verify the Player Entry belongs to this Auction, is not a
+    // Player Representative, and has no open/closing Presentation.
+    const playerResult = await client.query<{
+      id: string;
+      is_representative: boolean;
+      tier_id: null | string;
+    }>(
+      `select pe."id", pe."is_representative", pe."tier_id"
+         from "player_entry" pe
+        where pe."id" = $1 and pe."auction_id" = $2`,
+      [input.playerEntryId, input.auctionId],
+    );
+    const player = playerResult.rows[0];
+    if (!player) {
+      await client.query("rollback");
+      return reject("player_already_sold", auction.revision);
+    }
+    if (player.is_representative) {
+      await client.query("rollback");
+      return reject("player_is_representative", auction.revision);
+    }
+
+    // No active (unreversed) Sale.
+    const activeSale = await client.query(
+      `select 1 from "sale"
+        where "player_entry_id" = $1 and "reversed_at" is null`,
+      [input.playerEntryId],
+    );
+    if (activeSale.rowCount && activeSale.rowCount > 0) {
+      await client.query("rollback");
+      return reject("player_already_sold", auction.revision);
+    }
+
+    // No open or closing Presentation.
+    const activePresentation = await client.query(
+      `select 1 from "player_presentation"
+        where "player_entry_id" = $1 and "state" in ('open', 'closing')`,
+      [input.playerEntryId],
+    );
+    if (activePresentation.rowCount && activePresentation.rowCount > 0) {
+      await client.query("rollback");
+      return reject("player_already_sold", auction.revision);
+    }
+
+    // Verify the Team belongs to this Auction and load the budget / roster state.
+    const teamResult = await client.query<{
+      id: string;
+      budget: number;
+      roster_count: number;
+      spent_credits: number;
+    }>(
+      `select t."id",
+              ars."budget",
+              coalesce((
+                select count(*)::int
+                  from "sale" s
+                  join "player_entry" pe2 on pe2."id" = s."player_entry_id"
+                 where s."team_id" = t."id"
+                   and s."reversed_at" is null
+                   and s."auction_id" = $1
+              ), 0) as roster_count,
+              coalesce((
+                select sum(s."amount")::int
+                  from "sale" s
+                 where s."team_id" = t."id"
+                   and s."reversed_at" is null
+                   and s."auction_id" = $1
+              ), 0) as spent_credits
+         from "team" t
+         join "auction_rule_set" ars on ars."auction_id" = t."auction_id"
+        where t."id" = $2 and t."auction_id" = $1`,
+      [input.auctionId, input.teamId],
+    );
+    const team = teamResult.rows[0];
+    if (!team) {
+      await client.query("rollback");
+      return { status: "unauthorized" };
+    }
+
+    const remainingBudget = team.budget - team.spent_credits;
+    if (remainingBudget < input.amount) {
+      await client.query("rollback");
+      return reject("insufficient_budget", auction.revision);
+    }
+
+    // Roster max check.
+    const rosterMaxResult = await client.query<{ roster_max: number }>(
+      `select "roster_max" from "auction_rule_set" where "auction_id" = $1`,
+      [input.auctionId],
+    );
+    const rosterMax = rosterMaxResult.rows[0]?.roster_max ?? Infinity;
+
+    // Also count pre-assigned representatives.
+    const totalRosterResult = await client.query<{ count: number }>(
+      `select count(*)::int as count from "player_entry"
+        where "team_id" = $1 and "auction_id" = $2 and "is_representative" = true`,
+      [input.teamId, input.auctionId],
+    );
+    const totalRoster = team.roster_count + (totalRosterResult.rows[0]?.count ?? 0);
+
+    if (totalRoster >= rosterMax) {
+      await client.query("rollback");
+      return reject("roster_max_reached", auction.revision);
+    }
+
+    // Tiered: check per-tier max.
+    if (auction.rulesMode === "tiered" && player.tier_id) {
+      const tierResult = await client.query<{
+        max_per_team: number;
+        tier_count: number;
+      }>(
+        `select t."max_per_team",
+                coalesce((
+                  select count(*)::int
+                    from "sale" s
+                    join "player_entry" pe3 on pe3."id" = s."player_entry_id"
+                   where s."team_id" = $1
+                     and s."auction_id" = $2
+                     and s."reversed_at" is null
+                     and pe3."tier_id" = $3
+                ), 0) as tier_count
+           from "tier" t
+          where t."id" = $3 and t."auction_id" = $2`,
+        [input.teamId, input.auctionId, player.tier_id],
+      );
+      const tier = tierResult.rows[0];
+      if (tier && tier.tier_count >= tier.max_per_team) {
+        await client.query("rollback");
+        return reject("tier_max_reached", auction.revision);
+      }
+    }
+
+    // Insert the Direct Sale.
+    const inserted = await client.query<{ id: string }>(
+      `insert into "sale"
+          ("auction_id", "player_entry_id", "team_id", "amount", "source",
+           "presentation_id")
+       values ($1, $2, $3, $4, 'direct', null)
+       returning "id"`,
+      [input.auctionId, input.playerEntryId, input.teamId, input.amount],
+    );
+    const saleId = inserted.rows[0]!.id;
+
+    // Legal Completion check after the Sale row exists (same pattern as reverseSale).
+    if (
+      !(await auctionKeepsLegalCompletion(client, {
+        auctionId: input.auctionId,
+        rulesMode: auction.rulesMode,
+      }))
+    ) {
+      await client.query("rollback");
+      return reject("no_legal_completion", auction.revision);
+    }
+
+    // Clear any unresolved unsold membership so the Player no longer appears
+    // in the Unsold Pool.
+    await client.query(
+      `update "unsold_membership"
+          set "resolved_at" = now(), "resolution" = 'assigned', "sale_id" = $2
+        where "player_entry_id" = $1 and "resolved_at" is null`,
+      [input.playerEntryId, saleId],
+    );
+
+    const revision = await bumpRevision(
+      client,
+      input.auctionId,
+      "direct_sale",
+      {
+        amount: input.amount,
+        playerEntryId: input.playerEntryId,
+        reason: input.reason.trim(),
+        saleId,
+        teamId: input.teamId,
+      },
+    );
+    await writeAuditEntry(client, {
+      action: "direct_sale",
+      actorUserId: input.actorUserId,
+      auctionId: input.auctionId,
+      details: {
+        amount: input.amount,
+        playerEntryId: input.playerEntryId,
+        saleId,
+        teamId: input.teamId,
+      },
+      reason: input.reason.trim(),
+    });
+
+    const result: DirectSaleResult = {
+      amount: input.amount,
+      playerEntryId: input.playerEntryId,
+      saleId,
+      teamId: input.teamId,
+    };
+    await storeCommand(client, {
+      actorUserId: input.actorUserId,
+      auctionId: input.auctionId,
+      commandId: input.commandId,
+      kind: "direct_sale",
+      result,
+    });
+    await client.query("commit");
+    return { result, revision, status: "accepted" };
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}

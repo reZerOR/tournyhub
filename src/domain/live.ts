@@ -178,6 +178,12 @@ export const CORRECTION_REJECTION_REASONS = [
   "already_reversed",
   "no_legal_completion",
   "reason_required",
+  "invalid_amount",
+  "player_already_sold",
+  "player_is_representative",
+  "insufficient_budget",
+  "roster_max_reached",
+  "tier_max_reached",
 ] as const;
 
 export type CorrectionRejectionReason =
@@ -189,14 +195,20 @@ export const CORRECTION_REJECTION_MESSAGES: Record<
 > = {
   already_reversed: "That Sale is already reversed.",
   auction_not_paused: "Pause the Auction before correcting it.",
+  insufficient_budget: "That Team cannot afford that amount.",
+  invalid_amount: "The amount must be a whole number of at least 1 Credit.",
   no_bid: "There is no accepted Bid to cancel.",
   no_legal_completion:
     "That correction would leave no Legal Completion. Resolve the Auction first.",
   not_organizer: "Only the Organizer can correct the Auction.",
+  player_already_sold: "That Player has already been sold.",
+  player_is_representative: "Player Representatives cannot be sold.",
   presentation_missing: "That Player is no longer Active.",
   reason_required: "Enter a reason of at most 200 characters.",
+  roster_max_reached: "That Team has reached its maximum Roster size.",
   sale_missing: "That Sale is not part of this Auction.",
   stale_revision: "The Auction changed. Refresh before correcting.",
+  tier_max_reached: "That Team has reached the maximum for that Tier.",
 };
 
 /** The maximum length of an Organizer-supplied correction reason. */
