@@ -363,7 +363,7 @@ export function LiveOrganizerTools({
                   <FieldLabel htmlFor="tools-reverse-sale">Sale to Reverse</FieldLabel>
                   <Select
                     items={openSales.map((sale) => ({
-                      label: `${sale.playerDisplayName} · ${sale.amount} cr${sale.source === "forced" ? " (Forced)" : ""}`,
+                      label: `${sale.playerDisplayName} · ${sale.amount} cr${sale.source === "forced" ? " (Forced)" : sale.source === "direct" ? " (Direct)" : ""}`,
                       value: sale.saleId,
                     }))}
                     onValueChange={(val) => onSaleIdToReverseChange(val ?? "")}
