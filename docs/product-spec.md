@@ -130,6 +130,7 @@ While paused, the Organizer may:
 
 - Cancel the current highest Bid and restore the previous valid Bid or Starting Price
 - Reverse a Sale, refund its Team, and return the Player to the Unsold Pool
+- **Direct Assignment**: assign a pre-registered Player to a Team at a custom Credit amount, bypassing the bidding flow (subject to Budget, Roster, Tier, and Legal Completion constraints)
 - Replace a Team Representative
 - Add Players only to unopened Tiers
 - Increase every Team's Budget equally
@@ -150,7 +151,7 @@ Archiving hides an Auction for seven days, after which permanent deletion occurs
 
 ## Results and exports
 
-Completed results are available to the Organizer and Team Representatives. They show every Team's Roster, Credits spent and remaining, Tier counts, sale prices, Forced Assignments, and Final Unsold Players.
+Completed results are available to the Organizer and Team Representatives. They show every Team's Roster, Credits spent and remaining, Tier counts, sale prices, Direct Assignments, Forced Assignments, and Final Unsold Players.
 
 The Organizer's Results CSV includes every supplied Player phone number. A Team Representative's Results CSV includes phone numbers only for Players on that Team's Roster. The PDF omits phone numbers for every role. Access by a Platform Administrator requires a moderation reason and Audit Entry.
 

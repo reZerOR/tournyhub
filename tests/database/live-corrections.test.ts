@@ -7,6 +7,7 @@ import {
 } from "@/server/auction-command/close-player";
 import {
   cancelHighestBid,
+  directSale,
   reverseSale,
 } from "@/server/auction-command/corrections";
 import {
@@ -626,5 +627,379 @@ describe("reverseSale", () => {
     expect(reoffered.status).toBe("accepted");
     if (reoffered.status !== "accepted") return;
     expect(reoffered.result.startingPrice).toBe(10);
+  });
+});
+
+describe("directSale", () => {
+  it("creates a Direct Sale with no Presentation and shows on the roster as direct", async () => {
+    const fixture = await buildLiveAuction("direct-create");
+    await pause(fixture);
+
+    const outcome = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 25,
+      playerEntryId: fixture.players[0]!.id,
+      reason: "Organiser override",
+      teamId: fixture.redsTeamId,
+    });
+
+    expect(outcome.status).toBe("accepted");
+    if (outcome.status !== "accepted") return;
+
+    // The Sale row has source = 'direct' and no presentation reference.
+    const sale = await pool.query<{
+      amount: number;
+      presentation_id: null;
+      source: string;
+      team_id: string;
+    }>(
+      `select s."amount", s."presentation_id", s."source", s."team_id"
+         from "sale" s where s."id" = $1`,
+      [outcome.result.saleId],
+    );
+    expect(sale.rows[0]).toMatchObject({
+      amount: 25,
+      presentation_id: null,
+      source: "direct",
+      team_id: fixture.redsTeamId,
+    });
+
+    // The budget deduction shows up in the snapshot.
+    const snapshot = await getLiveSnapshot(
+      pool,
+      fixture.organizerId,
+      fixture.auctionId,
+    );
+    expect(snapshot!.snapshot.openSales).toContainEqual(
+      expect.objectContaining({
+        saleId: outcome.result.saleId,
+        source: "direct",
+        amount: 25,
+      }),
+    );
+    const reds = snapshot!.snapshot.teams.find(
+      (t) => t.id === fixture.redsTeamId,
+    )!;
+    const player = reds.players!.find((p) => p.id === fixture.players[0]!.id)!;
+    expect(player).toMatchObject({ source: "direct", amount: 25 });
+
+    // The Player is no longer eligible for normal selection.
+    const eligible = await pool.query<{ count: number }>(
+      `select count(*)::int as count from "player_entry" pe
+         where pe."auction_id" = $1 and pe."id" = $2
+           and not exists (
+             select 1 from "player_presentation" pp
+              where pp."player_entry_id" = pe."id"
+                and pp."state" in ('open', 'closing', 'sold', 'unsold'))
+           and not exists (
+             select 1 from "sale" s
+              where s."player_entry_id" = pe."id" and s."reversed_at" is null)`,
+      [fixture.auctionId, fixture.players[0]!.id],
+    );
+    expect(eligible.rows[0]!.count).toBe(0);
+
+    const audit = await pool.query<{ reason: string }>(
+      `select "reason" from "audit_entry"
+         where "auction_id" = $1 and "action" = 'direct_sale'`,
+      [fixture.auctionId],
+    );
+    expect(audit.rows[0]!.reason).toBe("Organiser override");
+  });
+
+  it("is allowed only for the Organizer and only while Paused", async () => {
+    const fixture = await buildLiveAuction("direct-guards");
+
+    const live = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 25,
+      playerEntryId: fixture.players[0]!.id,
+      reason: "Not paused",
+      teamId: fixture.redsTeamId,
+    });
+    expect(live).toMatchObject({ reason: "auction_not_paused" });
+
+    await pause(fixture);
+    const forged = await directSale(pool, {
+      actorUserId: fixture.redsRepUserId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 25,
+      playerEntryId: fixture.players[0]!.id,
+      reason: "Not organizer",
+      teamId: fixture.redsTeamId,
+    });
+    expect(forged.status).toBe("unauthorized");
+  });
+
+  it("rejects when the Player is not part of the Auction or is a Representative", async () => {
+    const fixture = await buildLiveAuction("direct-player-guards");
+    await pause(fixture);
+
+    // A bogus player id that does not exist.
+    const missing = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 25,
+      playerEntryId: randomUUID(),
+      reason: "Ghost",
+      teamId: fixture.redsTeamId,
+    });
+    expect(missing).toMatchObject({ reason: "player_not_found" });
+
+    // A Player Representative cannot be directly sold.
+    const repResult = await pool.query<{ id: string }>(
+      `select pe."id" from "player_entry" pe
+         where pe."auction_id" = $1 and pe."is_representative"
+         limit 1`,
+      [fixture.auctionId],
+    );
+    const rep = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 25,
+      playerEntryId: repResult.rows[0]!.id,
+      reason: "Rep",
+      teamId: fixture.redsTeamId,
+    });
+    expect(rep).toMatchObject({ reason: "player_is_representative" });
+  });
+
+  it("enforces Budget and Roster limits", async () => {
+    const fixture = await buildLiveAuction("direct-budget", { budget: 20 });
+    await pause(fixture);
+
+    // 25 cr exceeds the 20 cr budget.
+    const broke = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 25,
+      playerEntryId: fixture.players[0]!.id,
+      reason: "Over budget",
+      teamId: fixture.redsTeamId,
+    });
+    expect(broke).toMatchObject({ reason: "insufficient_budget" });
+
+    const ok = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 20,
+      playerEntryId: fixture.players[1]!.id,
+      reason: "Exact budget",
+      teamId: fixture.redsTeamId,
+    });
+    expect(ok.status).toBe("accepted");
+  });
+
+  it("prevents assigning a Player who is already sold or currently offered", async () => {
+    const fixture = await buildLiveAuction("direct-already");
+    await pause(fixture);
+
+    // Pre-assign player 0 directly, then try to assign them again.
+    const first = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 15,
+      playerEntryId: fixture.players[0]!.id,
+      reason: "First",
+      teamId: fixture.redsTeamId,
+    });
+    expect(first.status).toBe("accepted");
+
+    const dup = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 10,
+      playerEntryId: fixture.players[0]!.id,
+      reason: "Again",
+      teamId: fixture.bluesTeamId,
+    });
+    expect(dup).toMatchObject({ reason: "player_already_sold" });
+  });
+});
+
+describe("reverseSale for Direct Sales", () => {
+  it("reverses a Direct Sale and returns the Player to the Unsold Pool", async () => {
+    const fixture = await buildLiveAuction("reverse-direct");
+    await pause(fixture);
+
+    const sale = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 30,
+      playerEntryId: fixture.players[0]!.id,
+      reason: "Direct sale",
+      teamId: fixture.redsTeamId,
+    });
+    expect(sale.status).toBe("accepted");
+    if (sale.status !== "accepted") return;
+
+    const revResult = await revision(fixture.auctionId);
+    const outcome = await reverseSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: revResult,
+      reason: "Undo direct",
+      saleId: sale.result.saleId,
+    });
+
+    expect(outcome.status).toBe("accepted");
+    if (outcome.status !== "accepted") return;
+    expect(outcome.result).toMatchObject({
+      amount: 30,
+      teamId: fixture.redsTeamId,
+    });
+    expect(await revision(fixture.auctionId)).toBe(revResult + 1);
+
+    // The Sale is marked reversed; no presentation existed to return.
+    const saleRow = await pool.query<{
+      reversed_at: Date | null;
+      presentation_id: null;
+    }>(`select "reversed_at", "presentation_id" from "sale" where "id" = $1`, [
+      sale.result.saleId,
+    ]);
+    expect(saleRow.rows[0]!.reversed_at).not.toBeNull();
+    expect(saleRow.rows[0]!.presentation_id).toBeNull();
+
+    // The Player is in the Unsold Pool and the Team budget is restored.
+    const membership = await pool.query<{ count: number }>(
+      `select count(*)::int as count from "unsold_membership"
+         where "auction_id" = $1 and "player_entry_id" = $2
+           and "resolved_at" is null
+           and "presentation_id" is null`,
+      [fixture.auctionId, fixture.players[0]!.id],
+    );
+    expect(membership.rows[0]!.count).toBe(1);
+
+    const snapshot = await getLiveSnapshot(
+      pool,
+      fixture.redsRepUserId,
+      fixture.auctionId,
+    );
+    expect(snapshot!.snapshot.you.spentCredits).toBe(0);
+    expect(snapshot!.snapshot.you.remainingBudget).toBe(100);
+  });
+
+  it("replays a duplicate reversal without a second refund", async () => {
+    const fixture = await buildLiveAuction("reverse-direct-dup");
+    await pause(fixture);
+
+    const sale = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 20,
+      playerEntryId: fixture.players[0]!.id,
+      reason: "Direct",
+      teamId: fixture.redsTeamId,
+    });
+    expect(sale.status).toBe("accepted");
+    if (sale.status !== "accepted") return;
+
+    const expected = await revision(fixture.auctionId);
+    const id = commandId();
+
+    const first = await reverseSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: id,
+      expectedRevision: expected,
+      reason: "First reversal",
+      saleId: sale.result.saleId,
+    });
+    const replayed = await reverseSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: id,
+      expectedRevision: expected,
+      reason: "First reversal",
+      saleId: sale.result.saleId,
+    });
+    expect(first.status).toBe("accepted");
+    expect(replayed.status).toBe("replayed");
+
+    const reversals = await pool.query<{ count: number }>(
+      `select count(*)::int as count from "sale_reversal" where "sale_id" = $1`,
+      [sale.result.saleId],
+    );
+    expect(reversals.rows[0]!.count).toBe(1);
+  });
+
+  it("serializes competing reversals of distinct sales", async () => {
+    const fixture = await buildLiveAuction("reverse-direct-race");
+    await pause(fixture);
+
+    const directA = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 20,
+      playerEntryId: fixture.players[0]!.id,
+      reason: "Direct A",
+      teamId: fixture.redsTeamId,
+    });
+    expect(directA.status).toBe("accepted");
+    if (directA.status !== "accepted") return;
+
+    const directB = await directSale(pool, {
+      actorUserId: fixture.organizerId,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      amount: 15,
+      playerEntryId: fixture.players[1]!.id,
+      reason: "Direct B",
+      teamId: fixture.redsTeamId,
+    });
+    expect(directB.status).toBe("accepted");
+    if (directB.status !== "accepted") return;
+
+    expect(directA.result.saleId).not.toBe(directB.result.saleId);
+
+    const [left, right] = await Promise.all([
+      reverseSale(pool, {
+        actorUserId: fixture.organizerId,
+        auctionId: fixture.auctionId,
+        commandId: commandId(),
+        expectedRevision: await revision(fixture.auctionId),
+        reason: "Race one",
+        saleId: directA.result.saleId,
+      }),
+      reverseSale(pool, {
+        actorUserId: fixture.organizerId,
+        auctionId: fixture.auctionId,
+        commandId: commandId(),
+        expectedRevision: await revision(fixture.auctionId),
+        reason: "Race two",
+        saleId: directB.result.saleId,
+      }),
+    ]);
+    expect([left.status, right.status].sort()).toEqual([
+      "accepted",
+      "rejected",
+    ]);
   });
 });

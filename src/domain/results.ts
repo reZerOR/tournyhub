@@ -53,7 +53,7 @@ export function canViewPhoneNumbers({
 export const HIDDEN_PHONE = "Hidden";
 
 /** Where a Player joined a Team. */
-export type ResultsSource = "bid" | "forced" | "representative";
+export type ResultsSource = "bid" | "direct" | "forced" | "representative";
 
 export interface ResultsPlayerRow {
   amount: number;
@@ -151,6 +151,7 @@ export function exportFileName({
 
 export const RESULTS_SOURCE_LABELS: Record<ResultsSource, string> = {
   bid: "Bid",
+  direct: "Direct Assignment",
   forced: "Forced Assignment",
   representative: "Player Representative",
 };

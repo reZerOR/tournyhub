@@ -20,7 +20,7 @@ export interface AuctionResultsTeam {
     amount: number;
     displayName: string;
     playerEntryId: string;
-    source: "bid" | "forced";
+    source: "bid" | "direct" | "forced";
     tierId: null | string;
   }[];
   remainingBudget: number;
@@ -63,7 +63,7 @@ export async function loadAuctionResults(
     amount: number;
     display_name: string;
     player_entry_id: string;
-    source: "bid" | "forced";
+    source: "bid" | "direct" | "forced";
     team_id: string;
     tier_id: null | string;
   }>(
@@ -248,7 +248,7 @@ export async function getResultsForCaller(
     display_name: string;
     phone_number: null | string;
     player_entry_id: string;
-    source: "bid" | "forced";
+    source: "bid" | "direct" | "forced";
     team_id: string;
     tier_id: null | string;
   }>(

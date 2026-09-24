@@ -26,3 +26,10 @@
 - Prefers OTP inputs as separate gapped boxes with individual rounded borders, not glued together in a connected strip. Confidence: 0.7
 - Rejects explanatory subtext sitting under a title/heading — calls it "AI slopped". The fact a heading would otherwise explain belongs as a compact inline hint (a short monospace fragment) beside the control it constrains, not deleted and not hidden behind an info popover. Confidence: 0.85
 - Prefers a restrained, information-dense "instrument panel" register on repeated-use working surfaces (dense monospace numerals, hairline dividers, minimal colour) over dramatic, glowing, animated UI. Confidence: 0.6
+- Asks for critical architecture review — wants thorough analysis of their architectural decisions to identify what they did wrong, expecting deep root-cause analysis rather than surface-level summaries. Confidence: 0.6
+- Iterates test expectations against real system behavior — when a test's expected outcome conflicts with actual (correct) system behavior, adjusts the assertion to match reality rather than forcing the code to fit an incorrect assumption. Confidence: 0.75
+- Tests concurrency/serialization by racing two concurrent calls (via `Promise.all`) against the same expected revision, asserting exactly one "accepted" and one "rejected". Confidence: 0.7
+- Runs `npx tsc --noEmit` as a pre-test gate before invoking vitest when working on TypeScript changes. Confidence: 0.7
+- Inlines TypeScript type generics in test DB query calls (`pool.query<{...}>`) so assertions on query results are type-checked. Confidence: 0.65
+- Inserts an `if (outcome.status !== "accepted") return;` guard after status assertions to narrow union types for subsequent assertions on `outcome.result`. Confidence: 0.65
+- Uses descriptive scenario tags as fixture identifiers (e.g. `buildLiveAuction("direct-create")`) to isolate test state and self-document the case. Confidence: 0.6

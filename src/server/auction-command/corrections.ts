@@ -266,7 +266,7 @@ export async function reverseSale(
     const saleResult = await client.query<{
       amount: number;
       player_entry_id: string;
-      presentation_id: string;
+      presentation_id: null | string;
       reversed_at: Date | null;
       team_id: string;
       tier_id: null | string;
@@ -314,14 +314,17 @@ export async function reverseSale(
 
     // The Presentation no longer ends in an active Sale, so it returns to the
     // queue instead of blocking the Player from being offered again. The Sale
-    // and its reversal remain the authoritative record.
-    await client.query(
-      `update "player_presentation"
-          set "state" = 'returned', "return_reason" = $2,
-              "closed_at" = coalesce("closed_at", now()), "updated_at" = now()
-        where "id" = $1`,
-      [sale.presentation_id, reason],
-    );
+    // and its reversal remain the authoritative record. Direct Sales have no
+    // Presentation, so there is nothing to return.
+    if (sale.presentation_id !== null) {
+      await client.query(
+        `update "player_presentation"
+            set "state" = 'returned', "return_reason" = $2,
+                "closed_at" = coalesce("closed_at", now()), "updated_at" = now()
+          where "id" = $1`,
+        [sale.presentation_id, reason],
+      );
+    }
 
     await client.query(
       `insert into "unsold_membership"
@@ -461,7 +464,7 @@ export async function directSale(
     const player = playerResult.rows[0];
     if (!player) {
       await client.query("rollback");
-      return reject("player_already_sold", auction.revision);
+      return reject("player_not_found", auction.revision);
     }
     if (player.is_representative) {
       await client.query("rollback");
@@ -482,12 +485,12 @@ export async function directSale(
     // No open or closing Presentation.
     const activePresentation = await client.query(
       `select 1 from "player_presentation"
-        where "player_entry_id" = $1 and "state" in ('open', 'closing')`,
+         where "player_entry_id" = $1 and "state" in ('open', 'closing')`,
       [input.playerEntryId],
     );
     if (activePresentation.rowCount && activePresentation.rowCount > 0) {
       await client.query("rollback");
-      return reject("player_already_sold", auction.revision);
+      return reject("player_currently_offered", auction.revision);
     }
 
     // Verify the Team belongs to this Auction and load the budget / roster state.
@@ -544,7 +547,8 @@ export async function directSale(
         where "team_id" = $1 and "auction_id" = $2 and "is_representative" = true`,
       [input.teamId, input.auctionId],
     );
-    const totalRoster = team.roster_count + (totalRosterResult.rows[0]?.count ?? 0);
+    const totalRoster =
+      team.roster_count + (totalRosterResult.rows[0]?.count ?? 0);
 
     if (totalRoster >= rosterMax) {
       await client.query("rollback");

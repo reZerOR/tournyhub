@@ -12,3 +12,4 @@
 - [0010: Use a focused shadcn interface system](0010-use-a-focused-shadcn-interface-system.md)
 - [0011: Harden passwordless authentication and limit administration](0011-harden-passwordless-auth-and-limit-administration.md)
 - [0012: Carry invitation tokens in the emailed link](0012-carry-invitation-tokens-in-the-emailed-link.md)
+- [0013: Direct Assignment during Pause](0013-direct-assignment-during-pause.md)

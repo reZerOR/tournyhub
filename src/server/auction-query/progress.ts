@@ -263,7 +263,7 @@ export interface OpenSale {
   playerDisplayName: string;
   playerEntryId: string;
   saleId: string;
-  source: "bid" | "forced";
+  source: "bid" | "direct" | "forced";
   teamId: string;
   tierId: null | string;
 }
