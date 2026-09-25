@@ -4,9 +4,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { placeBid } from "@/server/auction-command/place-bid";
 import { selectPlayer } from "@/server/auction-command/select-player";
 import { getLiveSnapshot } from "@/server/auction-query/live-snapshot";
+import { getLiveRevision } from "@/server/auction-query/live-revision";
 import { CoalescingRealtimeDistributor } from "@/server/realtime/distributor";
 import {
   grantRealtimeAccess,
+  auctionBroadcastTopic,
   verifyRealtimeGrant,
 } from "@/server/realtime/grant";
 import {
@@ -70,6 +72,9 @@ describe("getLiveSnapshot", () => {
     expect(access!.snapshot.nextBidAmount).toBe(10);
     expect(access!.snapshot.you.role).toBe("organizer");
     expect(access!.snapshot.you.teamId).toBeNull();
+    expect(JSON.parse(JSON.stringify(access!.snapshot))).toEqual(
+      access!.snapshot,
+    );
   });
 
   it("gives a Representative only its own Team's private details", async () => {
@@ -112,15 +117,21 @@ describe("getLiveSnapshot", () => {
   it("hides a rejected Bid from another Team but shows it to the Organizer and submitter", async () => {
     const fixture = await buildLiveAuction("snapshot-rejection");
     const presentationId = await present(fixture);
-    await placeBid(pool, {
+    const beforeRejection = await revision(fixture.auctionId);
+    const outcome = await placeBid(pool, {
       actorUserId: fixture.redsRepUserId,
-      amount: 15,
+      amount: 5,
       auctionId: fixture.auctionId,
       commandId: commandId(),
       expectedRevision: await revision(fixture.auctionId),
       presentationId,
       teamId: fixture.redsTeamId,
     });
+    expect(outcome).toMatchObject({
+      status: "rejected",
+      reason: "wrong_amount",
+    });
+    expect(await revision(fixture.auctionId)).toBe(beforeRejection);
 
     const reds = await getLiveSnapshot(
       pool,
@@ -148,6 +159,70 @@ describe("getLiveSnapshot", () => {
   });
 });
 
+describe("getLiveRevision", () => {
+  it("allows the Organizer and current Representatives while Live or Paused", async () => {
+    const fixture = await buildLiveAuction("revision-access");
+    const organizer = await getLiveRevision(
+      pool,
+      fixture.organizerId,
+      fixture.auctionId,
+    );
+    const representative = await getLiveRevision(
+      pool,
+      fixture.redsRepUserId,
+      fixture.auctionId,
+    );
+    expect(organizer?.revision).toBe(1);
+    expect(representative?.revision).toBe(1);
+    expect(Number.isFinite(Date.parse(organizer!.serverTime))).toBe(true);
+
+    await pool.query(
+      `update "auction" set "status" = 'paused' where "id" = $1`,
+      [fixture.auctionId],
+    );
+    expect(
+      await getLiveRevision(pool, fixture.redsRepUserId, fixture.auctionId),
+    ).not.toBeNull();
+  });
+
+  it("hides unrelated, replaced, hidden, and non-Live Auctions", async () => {
+    const fixture = await buildLiveAuction("revision-denied");
+    const strangerId = await createTestUser("revision-stranger");
+    expect(
+      await getLiveRevision(pool, strangerId, fixture.auctionId),
+    ).toBeNull();
+
+    await pool.query(
+      `update "team" set "representative_user_id" = $2 where "id" = $1`,
+      [fixture.redsTeamId, strangerId],
+    );
+    expect(
+      await getLiveRevision(pool, fixture.redsRepUserId, fixture.auctionId),
+    ).toBeNull();
+    expect(
+      await getLiveRevision(pool, strangerId, fixture.auctionId),
+    ).not.toBeNull();
+
+    await pool.query(
+      `update "auction" set "hidden_at" = now(), "hidden_reason" = 'test' where "id" = $1`,
+      [fixture.auctionId],
+    );
+    expect(
+      await getLiveRevision(pool, fixture.organizerId, fixture.auctionId),
+    ).toBeNull();
+    await pool.query(
+      `update "auction" set "hidden_at" = null, "hidden_reason" = null, "status" = 'completed' where "id" = $1`,
+      [fixture.auctionId],
+    );
+    expect(
+      await getLiveRevision(pool, fixture.organizerId, fixture.auctionId),
+    ).toBeNull();
+    expect(
+      await getLiveRevision(pool, fixture.organizerId, randomUUID()),
+    ).toBeNull();
+  });
+});
+
 describe("Realtime grants", () => {
   it("issues short-lived grants only to Auction participants", async () => {
     const fixture = await buildLiveAuction("grant-membership");
@@ -162,7 +237,9 @@ describe("Realtime grants", () => {
       fixture.organizerId,
       fixture.auctionId,
     );
-    expect(organizerGrant?.channel).toBe(`auction:${fixture.auctionId}`);
+    expect(organizerGrant?.channel).toBe(
+      auctionBroadcastTopic(fixture.auctionId),
+    );
     expect(
       verifyRealtimeGrant({
         auctionId: fixture.auctionId,

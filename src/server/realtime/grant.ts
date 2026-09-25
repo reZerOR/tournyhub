@@ -18,6 +18,11 @@ export function auctionChannelName(auctionId: string): string {
   return `auction:${auctionId}`;
 }
 
+/** Public Broadcast topic disclosed only after Auction membership is checked. */
+export function auctionBroadcastTopic(auctionId: string): string {
+  return `auction:${auctionId}:${sign(`topic|${auctionId}`).slice(0, 24)}`;
+}
+
 function sign(payload: string): string {
   return createHmac("sha256", serverEnv.BETTER_AUTH_SECRET)
     .update(payload)
@@ -52,7 +57,7 @@ export async function grantRealtimeAccess(
     Math.floor(now.getTime() / 1000) + REALTIME_GRANT_TTL_SECONDS;
   const token = sign(grantPayload(auctionId, userId, expiresAtSeconds));
   return {
-    channel: auctionChannelName(auctionId),
+    channel: auctionBroadcastTopic(auctionId),
     expiresAt: new Date(expiresAtSeconds * 1000).toISOString(),
     token,
   };

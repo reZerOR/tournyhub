@@ -20,6 +20,7 @@ const environmentSchema = z
     GOOGLE_CLIENT_SECRET: z.string().min(1, "is required").optional(),
     NEXT_PUBLIC_APP_URL: httpUrl,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1, "is required"),
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1, "is required").optional(),
     NEXT_PUBLIC_SUPABASE_URL: httpUrl,
     PLATFORM_ADMIN_BOOTSTRAP_EMAIL: z
       .email("must be an email address")

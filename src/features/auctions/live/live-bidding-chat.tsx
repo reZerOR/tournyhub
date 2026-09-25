@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { ArrowDown, Flame, Gavel, Sparkles, Trophy, Zap } from "lucide-react";
 import { cn } from "cn";
 
@@ -11,29 +11,28 @@ import type {
   LiveTeamPublicState,
 } from "@/domain/live";
 import { formatCredits, formatTime, getTeamColor } from "./live-theme";
+import { LiveCountdown } from "./live-countdown";
 
 interface LiveBiddingChatProps {
   activePlayer: LiveActivePlayer | null;
   bids: LiveBidItem[];
-  closeRemaining: number | null;
+  clockOffsetMs: number;
   currentBid: null | { amount: number; teamId: string };
   finalizing: boolean;
   lastSale: LiveSale | null;
   nextBidAmount?: number | null;
   teams: LiveTeamPublicState[];
-  warningRemaining: number | null;
 }
 
-export function LiveBiddingChat({
+export const LiveBiddingChat = memo(function LiveBiddingChat({
   activePlayer,
   bids,
-  closeRemaining,
+  clockOffsetMs,
   currentBid,
   finalizing,
   lastSale,
   nextBidAmount,
   teams,
-  warningRemaining,
 }: LiveBiddingChatProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
@@ -157,25 +156,14 @@ export function LiveBiddingChat({
                 </span>
               </span>
 
-              {finalizing ? (
-                <span className="animate-pulse text-[10px] font-semibold text-emerald-400">
-                  Finalizing Sale…
-                </span>
-              ) : warningRemaining !== null && warningRemaining > 0 ? (
-                <span className="animate-pulse text-[10px] font-bold text-amber-400">
-                  Closing in {warningRemaining.toFixed(1)}s
-                </span>
-              ) : closeRemaining !== null &&
-                closeRemaining > 0 &&
-                closeRemaining <= 5 ? (
-                <span className="animate-pulse text-[10px] font-bold text-amber-400">
-                  Anti-Snipe: {closeRemaining.toFixed(1)}s
-                </span>
-              ) : (
-                <span className="text-[10px] text-muted-foreground">
-                  {currentBid ? "Leading" : "Opening"}
-                </span>
-              )}
+              <LiveCountdown
+                closeDeadline={activePlayer.closeDeadline}
+                clockOffsetMs={clockOffsetMs}
+                compact
+                fallbackLabel={currentBid ? "Leading" : "Opening"}
+                finalizing={finalizing}
+                warningDeadline={activePlayer.warningDeadline}
+              />
             </div>
           </div>
         ) : (
@@ -356,4 +344,4 @@ export function LiveBiddingChat({
       )}
     </div>
   );
-}
+});

@@ -42,28 +42,8 @@ import {
 import { loadOpenUnsoldRound } from "@/server/auction-query/progress";
 import { getCurrentSession } from "@/server/auth/session";
 import { getPool } from "@/server/database/pool";
-import {
-  CoalescingRealtimeDistributor,
-  discardRealtimeSender,
-} from "@/server/realtime/distributor";
-import { publishPendingOutbox } from "@/server/realtime/outbox";
 import { grantRealtimeAccess } from "@/server/realtime/grant";
-
-declare global {
-  var __tournyhubRealtimeDistributor: CoalescingRealtimeDistributor | undefined;
-}
-
-/**
- * One distributor per server process. The default sender discards events:
- * Realtime is an optional low-latency notification path, and the committed
- * outbox row plus snapshot recovery are enough on their own. A deployment can
- * inject a Supabase-backed sender here.
- */
-function distributor(): CoalescingRealtimeDistributor {
-  globalThis.__tournyhubRealtimeDistributor ??=
-    new CoalescingRealtimeDistributor({ send: discardRealtimeSender });
-  return globalThis.__tournyhubRealtimeDistributor;
-}
+import { notifyRevision } from "@/server/realtime/notify-revision";
 
 export type LiveOutcomeView =
   | { notice?: string; status: "accepted" | "replayed" }
@@ -92,28 +72,22 @@ function viewOutcome(
   return { status: "unauthorized" };
 }
 
-/** Publishes pending committed changes, then returns the caller's fresh snapshot. */
+/** Notifies participants and returns the caller's fresh snapshot. */
 async function settle(
   auctionId: string,
   userId: string,
   outcome: LiveCommandOutcome<unknown>,
   notice?: string,
 ): Promise<LiveActionPayload> {
-  await publishPendingOutbox(getPool(), auctionId, distributor());
-  const access = await getLiveSnapshot(getPool(), userId, auctionId);
+  const pool = getPool();
+  const [, access] = await Promise.all([
+    notifyRevision(pool, auctionId),
+    getLiveSnapshot(pool, userId, auctionId),
+  ]);
   return {
     outcome: viewOutcome(outcome, notice),
     snapshot: access?.snapshot ?? null,
   };
-}
-
-export async function loadSnapshotAction(
-  auctionId: string,
-): Promise<LiveSnapshot | null> {
-  const session = await getCurrentSession();
-  if (!session) return null;
-  const access = await getLiveSnapshot(getPool(), session.user.id, auctionId);
-  return access?.snapshot ?? null;
 }
 
 /** The Players an Organizer may offer next, for manual selection. */
