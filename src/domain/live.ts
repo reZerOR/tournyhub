@@ -181,6 +181,8 @@ export const CORRECTION_REJECTION_REASONS = [
   "invalid_amount",
   "player_already_sold",
   "player_is_representative",
+  "player_not_found",
+  "player_currently_offered",
   "insufficient_budget",
   "roster_max_reached",
   "tier_max_reached",
@@ -202,6 +204,9 @@ export const CORRECTION_REJECTION_MESSAGES: Record<
     "That correction would leave no Legal Completion. Resolve the Auction first.",
   not_organizer: "Only the Organizer can correct the Auction.",
   player_already_sold: "That Player has already been sold.",
+  player_currently_offered:
+    "That Player is currently being offered. Pause first.",
+  player_not_found: "That Player is not part of this Auction.",
   player_is_representative: "Player Representatives cannot be sold.",
   presentation_missing: "That Player is no longer Active.",
   reason_required: "Enter a reason of at most 200 characters.",
@@ -247,7 +252,7 @@ export interface LiveRosterPlayer {
   id: string;
   isRepresentative?: boolean;
   name: string;
-  source: "bid" | "forced" | "preassigned";
+  source: "bid" | "direct" | "forced" | "preassigned";
   tierId: null | string;
 }
 

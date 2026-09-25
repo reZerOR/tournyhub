@@ -11,7 +11,6 @@ import {
   Shuffle,
   Trophy,
   User,
-  Users,
 } from "lucide-react";
 import { cn } from "cn";
 
@@ -58,8 +57,6 @@ import {
   directSaleAction,
   finalizeAction,
   loadEligiblePlayersAction,
-  loadLivePlayerDetailsAction,
-  loadSnapshotAction,
   pauseAction,
   placeBidAction,
   requestMatchingAction,
@@ -72,25 +69,17 @@ import {
   type LiveActionPayload,
 } from "@/features/auctions/live/live-actions";
 import { LiveBiddingChat } from "./live-bidding-chat";
+import { acceptLiveSnapshot } from "./accept-live-snapshot";
+import { LiveCountdown } from "./live-countdown";
 import { LiveHeaderBar } from "./live-header-bar";
 import { LiveOrganizerTools } from "./live-organizer-tools";
 import { LivePlayerDetailsDialog } from "./live-player-details-dialog";
 import { LivePlayersPanel } from "./live-players-panel";
+import { LiveRosterPanel } from "./live-roster-panel";
 import { formatCredits, getTeamColor } from "./live-theme";
+import { useLiveSync } from "./use-live-sync";
 
-const POLL_INTERVAL_MS = 2000;
-
-function remainingSeconds(
-  deadline: null | string,
-  serverNowMs: number,
-): null | number {
-  if (!deadline) return null;
-  return Math.max(0, (Date.parse(deadline) - serverNowMs) / 1000);
-}
-
-function formatCountdown(seconds: number): string {
-  return `${seconds.toFixed(1)}s`;
-}
+const STALE_AFTER_MS = 20_000;
 
 export function LiveConsole({
   auctionId,
@@ -128,13 +117,16 @@ export function LiveConsole({
   const [finished, setFinished] = useState(false);
   const [message, setMessage] = useState<null | string>(null);
   const [notice, setNotice] = useState<null | string>(null);
-  const [now, setNow] = useState(() => Date.now());
-  const [lastSyncedAt, setLastSyncedAt] = useState(() => Date.now());
+  const lastSyncedAt = useRef<number | null>(null);
+  const [connectionStale, setConnectionStale] = useState(false);
+  const [expiredFor, setExpiredFor] = useState<{
+    deadline: string;
+    presentationId: string;
+  } | null>(null);
   const [clockOffsetMs, setClockOffsetMs] = useState(
     () => Date.now() - Date.parse(initialSnapshot.serverTime),
   );
   const finalizingFor = useRef<null | string>(null);
-  const refreshing = useRef(false);
   const previousSnapshot = useRef(initialSnapshot);
   const [announcement, setAnnouncement] = useState<null | string>(null);
   const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
@@ -176,60 +168,40 @@ export function LiveConsole({
   const accept = useCallback(
     (next: LiveSnapshot) => {
       const previous = previousSnapshot.current;
-      const change = describeLiveChange(previous, next);
-      const cue = soundCueFor(previous, next);
-      previousSnapshot.current = next;
-      if (change) setAnnouncement(change);
-      if (cue) playCue(cue);
-      setSnapshot(next);
-      setClockOffsetMs(Date.now() - Date.parse(next.serverTime));
-      setLastSyncedAt(Date.now());
+      acceptLiveSnapshot(previous, next, (current) => {
+        const change = describeLiveChange(previous, current);
+        const cue = soundCueFor(previous, current);
+        previousSnapshot.current = current;
+        if (change) setAnnouncement(change);
+        if (cue) playCue(cue);
+        setSnapshot(current);
+      });
     },
     [playCue],
   );
 
-  const refresh = useCallback(async () => {
-    if (refreshing.current) return;
-    refreshing.current = true;
-    try {
-      const next = await loadSnapshotAction(auctionId);
-      if (next) accept(next);
-    } catch {
-      // Retried on next poll interval
-    } finally {
-      refreshing.current = false;
-    }
-  }, [accept, auctionId]);
+  useLiveSync({
+    auctionId,
+    revision: snapshot.revision,
+    onSnapshot: accept,
+    onClockOffset: setClockOffsetMs,
+    onLost: () => {
+      setConnectionStale(true);
+      setMessage("You no longer have access to this Auction.");
+    },
+    onSynced: () => {
+      lastSyncedAt.current = Date.now();
+      setConnectionStale(false);
+    },
+  });
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      void refresh();
-    }, POLL_INTERVAL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
-    window.addEventListener("online", onVisible);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
-      window.removeEventListener("online", onVisible);
-    };
-  }, [refresh]);
-
-  const countingDown =
-    !!snapshot.activePlayer &&
-    (!!snapshot.activePlayer.warningDeadline ||
-      !!snapshot.activePlayer.closeDeadline);
-  useEffect(() => {
-    const tick = setInterval(
-      () => setNow(Date.now()),
-      countingDown ? 250 : POLL_INTERVAL_MS,
-    );
+    const tick = setInterval(() => {
+      lastSyncedAt.current ??= Date.now();
+      setConnectionStale(Date.now() - lastSyncedAt.current > STALE_AFTER_MS);
+    }, 1000);
     return () => clearInterval(tick);
-  }, [countingDown]);
+  }, []);
 
   useEffect(() => {
     if (role !== "organizer") return;
@@ -244,7 +216,14 @@ export function LiveConsole({
           })),
         );
     });
-  }, [auctionId, role, snapshot.revision]);
+  }, [
+    auctionId,
+    role,
+    snapshot.eligiblePlayerCount,
+    snapshot.activePlayer?.presentationId,
+    snapshot.lifecycle,
+    snapshot.activeTierId,
+  ]);
 
   const dispatch = useCallback(
     async (
@@ -368,37 +347,51 @@ export function LiveConsole({
   }, []);
 
   const activePlayer = snapshot.activePlayer;
-  const serverNowMs = now - clockOffsetMs;
-  const warningRemaining = remainingSeconds(
-    activePlayer?.warningDeadline ?? null,
-    serverNowMs,
-  );
-  const closeRemaining = remainingSeconds(
-    activePlayer?.closeDeadline ?? null,
-    serverNowMs,
-  );
+  const activeDeadline =
+    activePlayer?.warningDeadline ?? activePlayer?.closeDeadline ?? null;
   const finalizing =
     !!activePlayer &&
-    ((warningRemaining !== null && warningRemaining <= 0) ||
-      (closeRemaining !== null && closeRemaining <= 0));
+    expiredFor?.presentationId === activePlayer.presentationId &&
+    expiredFor.deadline === activeDeadline;
+
+  const onCountdownExpired = useCallback((deadline: string) => {
+    const current = previousSnapshot.current.activePlayer;
+    if (
+      current &&
+      (current.warningDeadline ?? current.closeDeadline) === deadline
+    ) {
+      setExpiredFor({ deadline, presentationId: current.presentationId });
+    }
+  }, []);
 
   useEffect(() => {
     if (!activePlayer || !finalizing) {
       finalizingFor.current = null;
       return;
     }
-    if (finalizingFor.current === activePlayer.presentationId) return;
-    finalizingFor.current = activePlayer.presentationId;
-    void dispatch(
-      finalizeAction(auctionId, {
-        presentationId: activePlayer.presentationId,
-      }),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePlayer?.presentationId, finalizing]);
+    const presentationId = activePlayer.presentationId;
+    if (finalizingFor.current === presentationId) return;
+    const finalize = () => {
+      const latest = previousSnapshot.current.activePlayer;
+      if (
+        !latest ||
+        latest.presentationId !== presentationId ||
+        (latest.warningDeadline ?? latest.closeDeadline) !== activeDeadline
+      )
+        return;
+      if (finalizingFor.current === presentationId) return;
+      finalizingFor.current = presentationId;
+      void dispatch(finalizeAction(auctionId, { presentationId }));
+    };
+    if (role === "organizer") {
+      finalize();
+      return;
+    }
+    const timer = setTimeout(finalize, 1500 + Math.random() * 1000);
+    return () => clearTimeout(timer);
+  }, [activeDeadline, activePlayer, auctionId, dispatch, finalizing, role]);
 
   const nextBid = snapshot.nextBidAmount;
-  const connectionStale = now - lastSyncedAt > POLL_INTERVAL_MS * 3;
   const controlsReady =
     snapshot.lifecycle === "live" && !connectionStale && !pending;
   const canBid =
@@ -700,29 +693,12 @@ export function LiveConsole({
                   </div>
 
                   {/* Countdown Readout (matches regex and attributes expected by tests) */}
-                  {warningRemaining !== null && warningRemaining > 0 && (
-                    <p className="animate-pulse text-sm font-bold text-amber-400 tabular-nums sm:text-base">
-                      Closing in {formatCountdown(warningRemaining)}
-                    </p>
-                  )}
-
-                  {closeRemaining !== null &&
-                    closeRemaining > 0 &&
-                    !finalizing && (
-                      <p className="text-sm font-bold text-primary tabular-nums sm:text-base">
-                        Timed Close in {formatCountdown(closeRemaining)}
-                      </p>
-                    )}
-
-                  {finalizing && (
-                    <p
-                      aria-live="assertive"
-                      className="text-sm font-bold text-emerald-400 sm:text-base"
-                      role="status"
-                    >
-                      Finalizing…
-                    </p>
-                  )}
+                  <LiveCountdown
+                    closeDeadline={activePlayer.closeDeadline}
+                    clockOffsetMs={clockOffsetMs}
+                    onExpired={onCountdownExpired}
+                    warningDeadline={activePlayer.warningDeadline}
+                  />
 
                   {/* Price Board: 3 Elevated Columns */}
                   <div className="grid grid-cols-3 gap-2 pt-1 text-center">
@@ -1313,134 +1289,23 @@ export function LiveConsole({
           <LiveBiddingChat
             activePlayer={activePlayer}
             bids={bidsList}
-            closeRemaining={closeRemaining}
+            clockOffsetMs={clockOffsetMs}
             currentBid={snapshot.currentBid}
             finalizing={finalizing}
             lastSale={lastCommittedSale}
             nextBidAmount={nextBid}
             teams={snapshot.teams}
-            warningRemaining={warningRemaining}
           />
         </div>
 
         {/* Column 3: Teams & Squad Rosters War Room (12 cols on lg, 3 on xl) */}
-        <div className="flex flex-col gap-4 lg:col-span-12 xl:col-span-3">
-          <Card className="border-border/80 bg-card/90 shadow-md">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle
-                  aria-level={2}
-                  role="heading"
-                  className="flex items-center gap-2 text-lg font-bold"
-                >
-                  <Users className="size-4 text-neon" />
-                  Teams
-                </CardTitle>
-                <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                  {snapshot.teams.length} teams
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ul className="flex flex-col gap-3">
-                {snapshot.teams.map((team) => {
-                  const color = getTeamColor(team);
-                  const isLeader = team.id === snapshot.currentBid?.teamId;
-                  const isYourTeam = team.id === snapshot.you.teamId;
-                  const players = team.players ?? [];
-
-                  return (
-                    <li
-                      key={team.id}
-                      className={cn(
-                        "flex flex-col gap-2 rounded-xl border p-3 transition-all",
-                        isLeader
-                          ? "border-emerald-500/50 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.1)] ring-1 ring-emerald-500/30"
-                          : isYourTeam
-                            ? "border-primary/40 bg-primary/5"
-                            : "border-border/50 bg-background/50",
-                      )}
-                      style={{
-                        borderLeftColor: color,
-                        borderLeftWidth: "4px",
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span
-                            className="flex size-6 shrink-0 items-center justify-center rounded-md text-[11px] font-bold"
-                            style={{
-                              backgroundColor: `${color}25`,
-                              color,
-                            }}
-                          >
-                            {(team.name ?? "T").charAt(0).toUpperCase()}
-                          </span>
-                          <span className="truncate text-xs font-semibold">
-                            {team.name ?? "Unnamed"}
-                            {team.isLeader ? " (leading)" : ""}
-                          </span>
-                        </div>
-
-                        {team.isLeader && (
-                          <span className="flex shrink-0 items-center gap-1 text-[10px] font-bold text-emerald-400">
-                            <Crown className="size-3" />
-                            Leading
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Text exact match for test: "Roster X · Spent Y · Remaining Z" */}
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        Roster {team.rosterCount} · Spent {team.spentCredits} ·
-                        Remaining {team.remainingBudget}
-                      </span>
-
-                      {/* Visual Acquired Players Chips (User Request #4) */}
-                      {players.length > 0 && (
-                        <div className="flex flex-wrap gap-1 border-t border-border/40 pt-1">
-                          {players.map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={async () => {
-                                const details =
-                                  await loadLivePlayerDetailsAction(
-                                    auctionId,
-                                    p.id,
-                                  );
-                                if (details) setDetailsPlayer(details);
-                              }}
-                              className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-foreground transition-colors hover:bg-muted/70"
-                              title="Click to view player details"
-                            >
-                              <span
-                                className="size-1.5 shrink-0 rounded-full"
-                                style={{ backgroundColor: color }}
-                              />
-                              <span className="max-w-[100px] truncate">
-                                {p.name}
-                              </span>
-                              {p.amount > 0 ? (
-                                <span className="font-mono text-muted-foreground">
-                                  {p.amount}cr
-                                </span>
-                              ) : (
-                                <span className="text-[9px] text-primary">
-                                  Rep
-                                </span>
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </CardContent>
-          </Card>
-        </div>
+        <LiveRosterPanel
+          auctionId={auctionId}
+          currentBid={snapshot.currentBid}
+          onPlayerDetails={setDetailsPlayer}
+          teams={snapshot.teams}
+          youTeamId={snapshot.you.teamId}
+        />
       </div>
 
       {/* Organizer Deeper Administrative Tools (Expandable below arena) */}

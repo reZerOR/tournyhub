@@ -29,14 +29,15 @@ The application runs at `http://localhost:3000`. `pnpm build` creates a producti
 
 The startup validator requires these variables:
 
-| Variable                               | Purpose                                                         | Exposure     |
-| -------------------------------------- | --------------------------------------------------------------- | ------------ |
-| `NEXT_PUBLIC_APP_URL`                  | Canonical application URL                                       | Browser-safe |
-| `DATABASE_URL`                         | PostgreSQL connection used by server modules and database tests | Server-only  |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project API URL                                        | Browser-safe |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase browser client key                                     | Browser-safe |
-| `SUPABASE_SERVICE_ROLE_KEY`            | Privileged Supabase server access                               | Server-only  |
-| `BETTER_AUTH_SECRET`                   | High-entropy secret Better Auth uses to sign sessions           | Server-only  |
+| Variable                               | Purpose                                                                    | Exposure     |
+| -------------------------------------- | -------------------------------------------------------------------------- | ------------ |
+| `NEXT_PUBLIC_APP_URL`                  | Canonical application URL                                                  | Browser-safe |
+| `DATABASE_URL`                         | PostgreSQL connection used by server modules and database tests            | Server-only  |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project API URL                                                   | Browser-safe |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase browser client key                                                | Browser-safe |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Live Broadcast key; use a legacy anon JWT if the REST endpoint returns 401 | Browser-safe |
+| `SUPABASE_SERVICE_ROLE_KEY`            | Privileged Supabase server access                                          | Server-only  |
+| `BETTER_AUTH_SECRET`                   | High-entropy secret Better Auth uses to sign sessions                      | Server-only  |
 
 Set `APP_ENVIRONMENT` to `development`, `preview`, or `production`, and declare
 `PRODUCTION_DATABASE_URL` in every environment. A Preview deployment that points
