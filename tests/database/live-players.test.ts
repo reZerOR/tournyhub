@@ -116,6 +116,11 @@ describe("authorized live player directory", () => {
       teamId,
       amount: null,
     });
+    // Representatives travel once at the top level, not inside each Team.
+    expect(organizer!.snapshot.representatives).toMatchObject([
+      { displayName: "Red Rep", teamId, tierId: null },
+    ]);
+    expect(Object.keys(organizer!.snapshot.teams[0]!)).not.toContain("players");
     expect(Object.keys(players[0]!).sort()).toEqual([
       "amount",
       "displayName",

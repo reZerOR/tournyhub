@@ -680,11 +680,15 @@ describe("directSale", () => {
         amount: 25,
       }),
     );
-    const reds = snapshot!.snapshot.teams.find(
-      (t) => t.id === fixture.redsTeamId,
+    // The roster panel derives a Team's roster from openSales + representatives.
+    const player = snapshot!.snapshot.openSales.find(
+      (sale) => sale.playerEntryId === fixture.players[0]!.id,
     )!;
-    const player = reds.players!.find((p) => p.id === fixture.players[0]!.id)!;
-    expect(player).toMatchObject({ source: "direct", amount: 25 });
+    expect(player).toMatchObject({
+      amount: 25,
+      source: "direct",
+      teamId: fixture.redsTeamId,
+    });
 
     // The Player is no longer eligible for normal selection.
     const eligible = await pool.query<{ count: number }>(

@@ -64,6 +64,16 @@ pnpm db:status
 
 Use `pnpm db:stop` when finished. `pnpm db:reset` recreates the local database and reapplies every migration, so use it only for disposable development data.
 
+## Production database
+
+Nothing in CI touches production. Migrations are applied deliberately, over the **direct** connection (port 5432, percent-encoded) kept in `PRODUCTION_DATABASE_URL`:
+
+```bash
+pnpm db:push
+```
+
+`pnpm db:push` refuses the transaction pooler (port 6543) and never prints the connection string. It applies the migrations the repository has that the project's history does not.
+
 ## Quality commands
 
 | Command             | Check                                              |
@@ -82,6 +92,7 @@ Use `pnpm db:stop` when finished. `pnpm db:reset` recreates the local database a
 | Command                | Purpose                                                                   |
 | ---------------------- | ------------------------------------------------------------------------- |
 | `pnpm migrate:status`  | Compare migration files with the applied history and fail on drift        |
+| `pnpm db:push`         | Apply pending migrations to the production database                       |
 | `pnpm admin:bootstrap` | Provision the first Platform Administrator, once                          |
 | `pnpm backup`          | Create a backup, its metadata, and a Storage manifest outside the project |
 | `pnpm restore`         | Restore an artifact into a separate non-production project                |

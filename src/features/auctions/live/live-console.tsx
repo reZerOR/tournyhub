@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Crown,
   Gavel,
@@ -39,6 +39,7 @@ import type {
   LiveSale,
   LiveSnapshot,
 } from "@/domain/live";
+import { applyLiveDelta, type LiveDeltaEvent } from "@/domain/live-delta";
 import { authClient } from "@/features/identity/auth-client";
 import {
   describeLiveChange,
@@ -79,7 +80,24 @@ import { LiveRosterPanel } from "./live-roster-panel";
 import { formatCredits, getTeamColor } from "./live-theme";
 import { useLiveSync } from "./use-live-sync";
 
-const STALE_AFTER_MS = 20_000;
+/**
+ * How long a healthy Realtime socket may go without a completed check before
+ * the console treats itself as stale. It must sit comfortably above the
+ * slowest plausible snapshot pull: a pull that is merely slow is not a lost
+ * connection, and an over-eager window is what silently disabled bidding
+ * during the 2026-09-23 auction.
+ */
+const STALE_AFTER_MS = 45_000;
+/** The same window while the Realtime socket is down and polling every 3 s. */
+const DEGRADED_STALE_AFTER_MS = 15_000;
+/**
+ * The Organizer's console is the designated finalizer. A Team Representative
+ * only wakes a close still uncommitted after this grace period, so a close
+ * cannot stall when the Organizer's tab is closed or offline.
+ */
+const REPRESENTATIVE_WAKE_GRACE_MS = 10_000;
+/** The Bid feed renders only its tail; the per-lot list is unbounded. */
+const BID_FEED_LIMIT = 50;
 
 export function LiveConsole({
   auctionId,
@@ -160,10 +178,10 @@ export function LiveConsole({
     [soundEnabled],
   );
 
-  async function toggleSound(enabled: boolean): Promise<void> {
+  const toggleSound = useCallback(async (enabled: boolean): Promise<void> => {
     setSoundEnabled(enabled);
     await authClient.updateUser({ soundEnabled: enabled });
-  }
+  }, []);
 
   const accept = useCallback(
     (next: LiveSnapshot) => {
@@ -180,9 +198,22 @@ export function LiveConsole({
     [playCue],
   );
 
-  useLiveSync({
+  // Applies a Broadcast delta to the state on screen. A false return means the
+  // console could not apply it, and useLiveSync resyncs with a snapshot pull.
+  const applyDelta = useCallback(
+    (event: LiveDeltaEvent) => {
+      const next = applyLiveDelta(previousSnapshot.current, event);
+      if (!next) return false;
+      accept(next);
+      return true;
+    },
+    [accept],
+  );
+
+  const { realtimeConnected, syncing } = useLiveSync({
     auctionId,
     revision: snapshot.revision,
+    applyDelta,
     onSnapshot: accept,
     onClockOffset: setClockOffsetMs,
     onLost: () => {
@@ -195,10 +226,25 @@ export function LiveConsole({
     },
   });
 
+  // Read by the 1 s tick below without restarting it on every change.
+  const syncingRef = useRef(syncing);
+  const socketRef = useRef(realtimeConnected);
+  useEffect(() => {
+    syncingRef.current = syncing;
+    socketRef.current = realtimeConnected;
+  });
+
   useEffect(() => {
     const tick = setInterval(() => {
       lastSyncedAt.current ??= Date.now();
-      setConnectionStale(Date.now() - lastSyncedAt.current > STALE_AFTER_MS);
+      const silentFor = Date.now() - lastSyncedAt.current;
+      // A check in flight is not a lost connection, and the socket state sets
+      // how patient to be: with the nudge path alive the 15 s poll is only a
+      // safety net, while a degraded console polls every three seconds.
+      const window = socketRef.current
+        ? STALE_AFTER_MS
+        : DEGRADED_STALE_AFTER_MS;
+      setConnectionStale(!syncingRef.current && silentFor > window);
     }, 1000);
     return () => clearInterval(tick);
   }, []);
@@ -229,7 +275,7 @@ export function LiveConsole({
     async (
       action: Promise<LiveActionPayload>,
       options: { completing?: boolean } = {},
-    ) => {
+    ): Promise<LiveActionPayload | null> => {
       setPending(true);
       setMessage(null);
       setNotice(null);
@@ -240,7 +286,13 @@ export function LiveConsole({
         } else if (options.completing) {
           setFinished(true);
         }
-        if (payload.outcome.status === "rejected")
+        // A stale revision is a synchronisation artefact, not a rule refusal:
+        // the caller retries against the snapshot this response carries, so it
+        // must never surface as a rejected Bid.
+        if (
+          payload.outcome.status === "rejected" &&
+          payload.outcome.reason !== "stale_revision"
+        )
           setMessage(payload.outcome.message);
         if (payload.outcome.status === "unauthorized") {
           setMessage("You no longer have access to this Auction.");
@@ -252,13 +304,48 @@ export function LiveConsole({
         ) {
           setNotice(payload.outcome.notice);
         }
+        return payload;
       } catch {
         setMessage("The connection dropped before the server answered.");
+        return null;
       } finally {
         setPending(false);
       }
     },
     [accept],
+  );
+
+  /**
+   * Submits a Bid, retrying once against the snapshot a `stale_revision`
+   * rejection carries. Ten Representatives advance the Revision faster than
+   * any one console pulls it, so a valid Bid is frequently refused purely for
+   * timing. Each attempt recomputes from `previousSnapshot`, which `accept`
+   * has already replaced with the freshest authorized state.
+   */
+  const submitBid = useCallback(
+    async (requestAmount: (current: LiveSnapshot) => null | number) => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const current = previousSnapshot.current;
+        const player = current.activePlayer;
+        const teamId = current.you.teamId;
+        const amount = requestAmount(current);
+        if (!player || !teamId || amount === null) return;
+
+        const payload = await dispatch(
+          placeBidAction(auctionId, {
+            amount,
+            expectedRevision: current.revision,
+            presentationId: player.presentationId,
+            teamId,
+          }),
+        );
+        const retryable =
+          payload?.outcome.status === "rejected" &&
+          payload.outcome.reason === "stale_revision";
+        if (!retryable) return;
+      }
+    },
+    [auctionId, dispatch],
   );
 
   const runShortcut = useCallback(
@@ -387,7 +474,10 @@ export function LiveConsole({
       finalize();
       return;
     }
-    const timer = setTimeout(finalize, 1500 + Math.random() * 1000);
+    const timer = setTimeout(
+      finalize,
+      REPRESENTATIVE_WAKE_GRACE_MS + Math.random() * 1_000,
+    );
     return () => clearTimeout(timer);
   }, [activeDeadline, activePlayer, auctionId, dispatch, finalizing, role]);
 
@@ -430,14 +520,16 @@ export function LiveConsole({
     ) {
       return;
     }
-    void dispatch(
-      placeBidAction(auctionId, {
-        amount: parsedCustom,
-        expectedRevision: snapshot.revision,
-        presentationId: activePlayer.presentationId,
-        teamId: snapshot.you.teamId,
-      }),
-    ).then(() => {
+    void submitBid((current) => {
+      // Keep the amount the player chose. A retry only re-sends it while it is
+      // still a legal Bid against the state the retry will run against.
+      const minimum = current.nextBidAmount;
+      if (minimum === null) return null;
+      return parsedCustom >= minimum &&
+        parsedCustom <= current.you.remainingBudget
+        ? parsedCustom
+        : null;
+    }).then(() => {
       setCustomBidAmount("");
     });
   };
@@ -449,6 +541,205 @@ export function LiveConsole({
         : (nextBid ?? 0);
     setCustomBidAmount(String(base + increment));
   };
+
+  // Stable identities for the memoized Organizer toolbox: without these it
+  // re-rendered on every keystroke and countdown tick in the console.
+  const activateNextTier = useCallback(
+    (tierId: string) =>
+      dispatch(
+        activateTierAction(auctionId, {
+          expectedRevision: snapshot.revision,
+          tierId,
+        }),
+      ),
+    [auctionId, dispatch, snapshot.revision],
+  );
+  const cancelHighestBid = useCallback(
+    () =>
+      dispatch(
+        cancelBidAction(auctionId, {
+          expectedRevision: snapshot.revision,
+          presentationId: activePlayer!.presentationId,
+          reason: correctionReason,
+        }),
+      ),
+    [activePlayer, auctionId, correctionReason, dispatch, snapshot.revision],
+  );
+  const closeUnsoldPool = useCallback(
+    () =>
+      dispatch(
+        closeUnsoldPoolAction(auctionId, {
+          expectedRevision: snapshot.revision,
+        }),
+      ),
+    [auctionId, dispatch, snapshot.revision],
+  );
+  const completeAuction = useCallback(
+    () =>
+      dispatch(
+        completeAuctionAction(auctionId, {
+          expectedRevision: snapshot.revision,
+        }),
+        { completing: true },
+      ),
+    [auctionId, dispatch, snapshot.revision],
+  );
+  const requestMatching = useCallback(
+    () =>
+      dispatch(
+        requestMatchingAction(auctionId, {
+          expectedRevision: snapshot.revision,
+        }),
+      ),
+    [auctionId, dispatch, snapshot.revision],
+  );
+  const reverseSale = useCallback(
+    (saleId: string) =>
+      dispatch(
+        reverseSaleAction(auctionId, {
+          expectedRevision: snapshot.revision,
+          reason: correctionReason,
+          saleId,
+        }),
+      ),
+    [auctionId, correctionReason, dispatch, snapshot.revision],
+  );
+  const startUnsoldRound = useCallback(
+    () =>
+      dispatch(
+        startUnsoldRoundAction(auctionId, {
+          expectedRevision: snapshot.revision,
+        }),
+      ),
+    [auctionId, dispatch, snapshot.revision],
+  );
+  const confirmDirectSale = useCallback(() => {
+    void dispatch(
+      directSaleAction(auctionId, {
+        amount: directSaleAmount,
+        expectedRevision: snapshot.revision,
+        playerEntryId: directSalePlayerId,
+        reason: correctionReason,
+        teamId: directSaleTeamId,
+      }),
+    ).then(() => {
+      setDirectSalePlayerId("");
+      setDirectSaleTeamId("");
+      setDirectSaleAmount(0);
+    });
+  }, [
+    auctionId,
+    correctionReason,
+    directSaleAmount,
+    directSalePlayerId,
+    directSaleTeamId,
+    dispatch,
+    snapshot.revision,
+  ]);
+  const directSaleOptions = useMemo(() => eligible ?? [], [eligible]);
+
+  // Everything derived from the snapshot is memoized here, above the `finished`
+  // return so the hook order never varies. Without this, `bidsList` and the
+  // Tier lookup were fresh identifiers on every render, which defeated the
+  // `memo` on every child that receives them.
+  const derived = useMemo(() => {
+    const nextActiveTier = snapshot.tiers.find(
+      (tier) => tier.id === snapshot.activeTierId,
+    );
+    const nextEligibleTeamsInTier = nextActiveTier
+      ? snapshot.teams.filter(
+          (team) =>
+            (team.tierCounts[nextActiveTier.id] ?? 0) <
+            nextActiveTier.maxPerTeam,
+        )
+      : [];
+    const nextUnofferedInTier = (eligible ?? []).filter(
+      (player) => player.tierId === nextActiveTier?.id,
+    );
+    const nextActivePlayerInTier =
+      activePlayer && activePlayer.tierId === nextActiveTier?.id
+        ? activePlayer
+        : null;
+    const nextRemainingTierPlayer =
+      nextActivePlayerInTier && nextUnofferedInTier.length === 0
+        ? {
+            displayName: nextActivePlayerInTier.displayName,
+            id: nextActivePlayerInTier.playerEntryId,
+            startingPrice: nextActivePlayerInTier.startingPrice,
+          }
+        : !nextActivePlayerInTier && nextUnofferedInTier.length === 1
+          ? nextUnofferedInTier[0]!
+          : null;
+    const tierSales = nextActiveTier
+      ? snapshot.openSales.filter((sale) => sale.tierId === nextActiveTier.id)
+      : [];
+    const nextLeadingTeam = snapshot.currentBid
+      ? snapshot.teams.find((team) => team.id === snapshot.currentBid!.teamId)
+      : null;
+    const bids: LiveBidItem[] = (snapshot.bids ?? []).slice(-BID_FEED_LIMIT);
+    const lastSale: LiveSale | null =
+      snapshot.openSales.length > 0
+        ? snapshot.openSales[snapshot.openSales.length - 1]!
+        : null;
+
+    return {
+      activePlayerInTier: nextActivePlayerInTier,
+      activeTier: nextActiveTier,
+      bidsList: bids,
+      eligibleTeamsInTier: nextEligibleTeamsInTier,
+      lastCommittedSale: lastSale,
+      leadingTeam: nextLeadingTeam,
+      leadingTeamColor: nextLeadingTeam
+        ? getTeamColor(nextLeadingTeam)
+        : "#10b981",
+      remainingTierPlayer: nextRemainingTierPlayer,
+      soleEligibleTeam:
+        nextEligibleTeamsInTier.length === 1
+          ? nextEligibleTeamsInTier[0]!
+          : null,
+      tierAvgPrice:
+        tierSales.length > 0
+          ? Math.round(
+              tierSales.reduce((sum, sale) => sum + sale.amount, 0) /
+                tierSales.length,
+            )
+          : (nextRemainingTierPlayer?.startingPrice ??
+            nextActiveTier?.startingPrice ??
+            0),
+      tierBasePrice:
+        nextRemainingTierPlayer?.startingPrice ??
+        nextActiveTier?.startingPrice ??
+        0,
+      totalSpent: snapshot.teams.reduce(
+        (sum, team) => sum + team.spentCredits,
+        0,
+      ),
+      unofferedInTier: nextUnofferedInTier,
+      unsoldRound: snapshot.unsoldRound,
+    };
+  }, [activePlayer, eligible, snapshot]);
+
+  const {
+    activeTier,
+    bidsList,
+    lastCommittedSale,
+    leadingTeam,
+    leadingTeamColor,
+    remainingTierPlayer,
+    soleEligibleTeam,
+    tierAvgPrice,
+    tierBasePrice,
+    totalSpent,
+    unsoldRound,
+  } = derived;
+
+  const showRemainingResolution =
+    role === "organizer" &&
+    snapshot.rulesMode === "tiered" &&
+    !!activeTier &&
+    !activeTier.complete &&
+    !!remainingTierPlayer &&
+    !!soleEligibleTeam;
 
   if (finished) {
     return (
@@ -473,68 +764,6 @@ export function LiveConsole({
     );
   }
 
-  const unsoldRound = snapshot.unsoldRound;
-  const activeTier = snapshot.tiers.find((t) => t.id === snapshot.activeTierId);
-  const eligibleTeamsInTier = activeTier
-    ? snapshot.teams.filter(
-        (t) => (t.tierCounts[activeTier.id] ?? 0) < activeTier.maxPerTeam,
-      )
-    : [];
-  const unofferedInTier = (eligible ?? []).filter(
-    (p) => p.tierId === activeTier?.id,
-  );
-  const activePlayerInTier =
-    activePlayer && activePlayer.tierId === activeTier?.id
-      ? activePlayer
-      : null;
-
-  const remainingTierPlayer =
-    activePlayerInTier && unofferedInTier.length === 0
-      ? {
-          displayName: activePlayerInTier.displayName,
-          id: activePlayerInTier.playerEntryId,
-          startingPrice: activePlayerInTier.startingPrice,
-        }
-      : !activePlayerInTier && unofferedInTier.length === 1
-        ? unofferedInTier[0]!
-        : null;
-
-  const soleEligibleTeam =
-    eligibleTeamsInTier.length === 1 ? eligibleTeamsInTier[0]! : null;
-
-  const showRemainingResolution =
-    role === "organizer" &&
-    snapshot.rulesMode === "tiered" &&
-    !!activeTier &&
-    !activeTier.complete &&
-    !!remainingTierPlayer &&
-    !!soleEligibleTeam;
-
-  const tierSales = activeTier
-    ? snapshot.openSales.filter((s) => s.tierId === activeTier.id)
-    : [];
-  const tierAvgPrice =
-    tierSales.length > 0
-      ? Math.round(
-          tierSales.reduce((sum, s) => sum + s.amount, 0) / tierSales.length,
-        )
-      : (remainingTierPlayer?.startingPrice ?? activeTier?.startingPrice ?? 0);
-  const tierBasePrice =
-    remainingTierPlayer?.startingPrice ?? activeTier?.startingPrice ?? 0;
-
-  const leadingTeam = snapshot.currentBid
-    ? snapshot.teams.find((team) => team.id === snapshot.currentBid!.teamId)
-    : null;
-  const leadingTeamColor = leadingTeam ? getTeamColor(leadingTeam) : "#10b981";
-
-  const totalSpent = snapshot.teams.reduce((sum, t) => sum + t.spentCredits, 0);
-  const lastCommittedSale: LiveSale | null =
-    snapshot.openSales.length > 0
-      ? snapshot.openSales[snapshot.openSales.length - 1]!
-      : null;
-
-  const bidsList: LiveBidItem[] = snapshot.bids ?? [];
-
   return (
     <div className="flex flex-col gap-6">
       {/* Top Executive Header Bar */}
@@ -545,7 +774,7 @@ export function LiveConsole({
         connectionStale={connectionStale}
         eligiblePlayerCount={snapshot.eligiblePlayerCount}
         lifecycle={snapshot.lifecycle}
-        onToggleSound={(checked) => void toggleSound(checked)}
+        onToggleSound={toggleSound}
         revision={snapshot.revision}
         role={role}
         salesCount={snapshot.openSales.length}
@@ -894,14 +1123,7 @@ export function LiveConsole({
                       className="h-13 text-base font-bold shadow-lg transition-transform active:scale-[0.98] sm:text-lg"
                       disabled={pending}
                       onClick={() =>
-                        dispatch(
-                          placeBidAction(auctionId, {
-                            amount: nextBid!,
-                            expectedRevision: snapshot.revision,
-                            presentationId: activePlayer!.presentationId,
-                            teamId: snapshot.you.teamId!,
-                          }),
-                        )
+                        void submitBid((current) => current.nextBidAmount)
                       }
                       type="button"
                     >
@@ -1303,6 +1525,8 @@ export function LiveConsole({
           auctionId={auctionId}
           currentBid={snapshot.currentBid}
           onPlayerDetails={setDetailsPlayer}
+          openSales={snapshot.openSales}
+          representatives={snapshot.representatives}
           teams={snapshot.teams}
           youTeamId={snapshot.you.teamId}
         />
@@ -1319,84 +1543,22 @@ export function LiveConsole({
           directSaleAmount={directSaleAmount}
           directSalePlayerId={directSalePlayerId}
           directSaleTeamId={directSaleTeamId}
-          eligiblePlayersForDirectSale={eligible ?? []}
+          eligiblePlayersForDirectSale={directSaleOptions}
           lifecycle={snapshot.lifecycle}
           nextTierId={snapshot.nextTierId}
-          onActivateTier={(tierId) =>
-            dispatch(
-              activateTierAction(auctionId, {
-                expectedRevision: snapshot.revision,
-                tierId,
-              }),
-            )
-          }
-          onCancelHighestBid={() =>
-            dispatch(
-              cancelBidAction(auctionId, {
-                expectedRevision: snapshot.revision,
-                presentationId: activePlayer!.presentationId,
-                reason: correctionReason,
-              }),
-            )
-          }
-          onCloseUnsoldPool={() =>
-            dispatch(
-              closeUnsoldPoolAction(auctionId, {
-                expectedRevision: snapshot.revision,
-              }),
-            )
-          }
-          onCompleteAuction={() =>
-            dispatch(
-              completeAuctionAction(auctionId, {
-                expectedRevision: snapshot.revision,
-              }),
-              { completing: true },
-            )
-          }
+          onActivateTier={activateNextTier}
+          onCancelHighestBid={cancelHighestBid}
+          onCloseUnsoldPool={closeUnsoldPool}
+          onCompleteAuction={completeAuction}
           onCorrectionReasonChange={setCorrectionReason}
-          onDirectSale={() => {
-            void dispatch(
-              directSaleAction(auctionId, {
-                amount: directSaleAmount,
-                expectedRevision: snapshot.revision,
-                playerEntryId: directSalePlayerId,
-                reason: correctionReason,
-                teamId: directSaleTeamId,
-              }),
-            ).then(() => {
-              setDirectSalePlayerId("");
-              setDirectSaleTeamId("");
-              setDirectSaleAmount(0);
-            });
-          }}
+          onDirectSale={confirmDirectSale}
           onDirectSaleAmountChange={setDirectSaleAmount}
           onDirectSalePlayerChange={setDirectSalePlayerId}
           onDirectSaleTeamChange={setDirectSaleTeamId}
-          onRequestMatching={() =>
-            dispatch(
-              requestMatchingAction(auctionId, {
-                expectedRevision: snapshot.revision,
-              }),
-            )
-          }
-          onReverseSale={(saleId) =>
-            dispatch(
-              reverseSaleAction(auctionId, {
-                expectedRevision: snapshot.revision,
-                reason: correctionReason,
-                saleId,
-              }),
-            )
-          }
+          onRequestMatching={requestMatching}
+          onReverseSale={reverseSale}
           onSaleIdToReverseChange={setSaleIdToReverse}
-          onStartUnsoldRound={() =>
-            dispatch(
-              startUnsoldRoundAction(auctionId, {
-                expectedRevision: snapshot.revision,
-              }),
-            )
-          }
+          onStartUnsoldRound={startUnsoldRound}
           openSales={snapshot.openSales}
           pending={pending}
           rejections={snapshot.rejections}

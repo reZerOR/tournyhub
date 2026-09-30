@@ -5,7 +5,13 @@ import { Crown, Users } from "lucide-react";
 import { cn } from "cn";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { LivePlayerDetails, LiveTeamPublicState } from "@/domain/live";
+import type {
+  LivePlayerDetails,
+  LiveRepresentative,
+  LiveRosterPlayer,
+  LiveSale,
+  LiveTeamPublicState,
+} from "@/domain/live";
 import { loadLivePlayerDetailsAction } from "./live-actions";
 import { getTeamColor } from "./live-theme";
 
@@ -13,6 +19,8 @@ interface LiveRosterPanelProps {
   auctionId: string;
   currentBid: null | { amount: number; teamId: string };
   onPlayerDetails: (details: LivePlayerDetails) => void;
+  openSales: LiveSale[];
+  representatives: LiveRepresentative[];
   teams: LiveTeamPublicState[];
   youTeamId: null | string;
 }
@@ -21,6 +29,8 @@ export const LiveRosterPanel = memo(function LiveRosterPanel({
   auctionId,
   currentBid,
   onPlayerDetails,
+  openSales,
+  representatives,
   teams,
   youTeamId,
 }: LiveRosterPanelProps) {
@@ -48,7 +58,28 @@ export const LiveRosterPanel = memo(function LiveRosterPanel({
               const color = getTeamColor(team);
               const isLeader = team.id === currentBid?.teamId;
               const isYourTeam = team.id === youTeamId;
-              const players = team.players ?? [];
+              const players: LiveRosterPlayer[] = [
+                ...representatives
+                  .filter((rep) => rep.teamId === team.id)
+                  .map((rep) => ({
+                    amount: 0,
+                    id: rep.id,
+                    isRepresentative: true,
+                    name: rep.displayName,
+                    source: "preassigned" as const,
+                    tierId: rep.tierId,
+                  })),
+                ...openSales
+                  .filter((sale) => sale.teamId === team.id)
+                  .map((sale) => ({
+                    amount: sale.amount,
+                    id: sale.playerEntryId,
+                    isRepresentative: false,
+                    name: sale.playerDisplayName,
+                    source: sale.source,
+                    tierId: sale.tierId,
+                  })),
+              ];
 
               return (
                 <li

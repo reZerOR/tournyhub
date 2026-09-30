@@ -287,6 +287,57 @@ async function existingOutcome(
 }
 
 /**
+ * The already-committed outcome for a Presentation, read without opening a
+ * transaction or taking the Auction row lock. Every Participant wakes a close
+ * when a countdown expires, so the duplicate wakes must not queue behind each
+ * other on the lock only to discover there is nothing left to do.
+ *
+ * A row is returned only for an Organizer or a current Team Representative, so
+ * an unauthorized caller learns nothing and falls through to the authoritative
+ * locked path, which answers `unauthorized`.
+ */
+async function settledOutcome(
+  pool: Pool,
+  auctionId: string,
+  actorUserId: string,
+  presentationId: string,
+): Promise<LiveCommandOutcome<PresentationOutcome> | null> {
+  const result = await pool.query<{
+    amount: null | number;
+    revision: number;
+    sale_id: null | string;
+    team_id: null | string;
+  }>(
+    `select a."revision", s."id" as sale_id, s."amount", s."team_id"
+       from "player_presentation" pp
+       join "auction" a on a."id" = pp."auction_id"
+       left join "sale" s
+         on s."presentation_id" = pp."id" and s."reversed_at" is null
+      where pp."id" = $1
+        and pp."auction_id" = $2
+        and pp."state" in ('sold', 'unsold')
+        and (a."organizer_id" = $3
+             or exists (select 1 from "team" t
+                         where t."auction_id" = a."id"
+                           and t."representative_user_id" = $3))`,
+    [presentationId, auctionId, actorUserId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+
+  const outcome: PresentationOutcome =
+    row.sale_id && row.amount !== null && row.team_id
+      ? {
+          amount: row.amount,
+          kind: "sold",
+          saleId: row.sale_id,
+          teamId: row.team_id,
+        }
+      : { kind: "unsold" };
+  return { result: outcome, revision: row.revision, status: "replayed" };
+}
+
+/**
  * Closes an expired Player Presentation exactly once. The committed leader
  * becomes a Sale; a Presentation with no valid Bid becomes Unsold and enters
  * the Unsold Pool. A duplicate finalizer or a repeated command ID returns the
@@ -301,6 +352,17 @@ export async function finalizePresentation(
   pool: Pool,
   input: FinalizeInput,
 ): Promise<LiveCommandOutcome<PresentationOutcome>> {
+  // A duplicate wake settles here, with no transaction and no row lock.
+  if (input.presentationId) {
+    const settled = await settledOutcome(
+      pool,
+      input.auctionId,
+      input.actorUserId,
+      input.presentationId,
+    );
+    if (settled) return settled;
+  }
+
   const client = await pool.connect();
   try {
     await client.query("begin");

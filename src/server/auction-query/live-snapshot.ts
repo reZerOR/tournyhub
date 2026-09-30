@@ -8,7 +8,7 @@ import {
   type LiveCallerPrivateState,
   type LiveCustomFieldValue,
   type LivePlayerDetails,
-  type LiveRosterPlayer,
+  type LiveRepresentative,
   type LiveSnapshot,
   type LiveTeamPublicState,
   type LiveTierProgress,
@@ -66,6 +66,7 @@ interface TeamRow {
   id: string;
   name: null | string;
   position: number;
+  representative_user_id: null | string;
 }
 
 interface BidRow {
@@ -172,9 +173,6 @@ export async function getLiveSnapshot(
   const auction = auctionResult.rows[0];
   if (!auction || !isLiveStatus(auction.status)) return null;
 
-  const role = await resolveLiveRole(db, userId, auctionId);
-  if (!role) return null;
-
   const [presentationResult, teamsResult, tierResult] = await Promise.all([
     db.query<PresentationRow>(
       `select pp."id", pp."player_entry_id", pp."tier_id", pp."starting_price",
@@ -190,7 +188,8 @@ export async function getLiveSnapshot(
       [auctionId],
     ),
     db.query<TeamRow>(
-      `select "id", "name", "color", "position" from "team"
+      `select "id", "name", "color", "position", "representative_user_id"
+         from "team"
         where "auction_id" = $1
         order by "position" asc, "created_at" asc, "id" asc`,
       [auctionId],
@@ -213,10 +212,24 @@ export async function getLiveSnapshot(
 
   const presentation = presentationResult.rows[0] ?? null;
   const tiers = tierResult.rows;
+  const orderedTierIds = tiers.map((tier) => tier.id);
+
+  // The role comes from rows already fetched: the Organizer from the Auction,
+  // a Representative from the Team that names this User. Resolving it in its
+  // own query re-read the Auction row on every snapshot.
+  const representativeTeam = teamsResult.rows.find(
+    (team) => team.representative_user_id === userId,
+  );
+  const role =
+    auction.organizer_id === userId
+      ? ({ role: "organizer", teamId: null } as const)
+      : representativeTeam
+        ? ({ role: "representative", teamId: representativeTeam.id } as const)
+        : null;
+  if (!role) return null;
 
   const [
-    spendResult,
-    tierCountsResult,
+    minimumStates,
     bidResult,
     rejectionResult,
     timeResult,
@@ -224,34 +237,7 @@ export async function getLiveSnapshot(
     playerRepsResult,
     activeCustomFieldsResult,
   ] = await Promise.all([
-    db.query<{
-      team_id: string;
-      sale_count: number;
-      spent: number;
-    }>(
-      `select t."id" as team_id,
-                coalesce(sum(s."amount") filter (where s."reversed_at" is null), 0)::int as spent,
-                count(s."id") filter (where s."reversed_at" is null)::int as sale_count
-           from "team" t
-           left join "sale" s on s."team_id" = t."id"
-          where t."auction_id" = $1
-          group by t."id"`,
-      [auctionId],
-    ),
-    db.query<{ count: number; team_id: string; tier_id: null | string }>(
-      `select pe."team_id", pe."tier_id", count(*)::int as count
-           from "player_entry" pe
-          where pe."auction_id" = $1 and pe."team_id" is not null
-            and pe."is_representative"
-          group by pe."team_id", pe."tier_id"
-         union all
-         select s."team_id", pe."tier_id", count(*)::int as count
-           from "sale" s
-           join "player_entry" pe on pe."id" = s."player_entry_id"
-          where s."auction_id" = $1 and s."reversed_at" is null
-          group by s."team_id", pe."tier_id"`,
-      [auctionId],
-    ),
+    loadTeamMinimumStates(db, auctionId, orderedTierIds),
     presentation
       ? db.query<BidRow>(
           `select "id", "amount", "team_id", "server_time" from "bid_attempt"
@@ -297,15 +283,25 @@ export async function getLiveSnapshot(
         }),
   ]);
 
-  const spendByTeam = new Map(
-    spendResult.rows.map((row) => [row.team_id, row]),
+  const minimumStateById = new Map(
+    minimumStates.map((state) => [state.id, state]),
   );
   const tierCountsByTeam = new Map<string, Record<string, number>>();
-  for (const row of tierCountsResult.rows) {
-    const counts = tierCountsByTeam.get(row.team_id) ?? {};
-    const key = row.tier_id ?? "unassigned";
-    counts[key] = (counts[key] ?? 0) + row.count;
-    tierCountsByTeam.set(row.team_id, counts);
+  for (const state of minimumStates) {
+    const counts: Record<string, number> = {};
+    let assigned = 0;
+    orderedTierIds.forEach((tierId, index) => {
+      const count = state.tierCounts[index] ?? 0;
+      if (count > 0) {
+        counts[tierId] = count;
+        assigned += count;
+      }
+    });
+    // A Representative with no Tier is absent from the per-Tier counts, so the
+    // remainder of the roster is the "unassigned" bucket the client expects.
+    const unassigned = state.rosterCount - assigned;
+    if (unassigned > 0) counts.unassigned = unassigned;
+    tierCountsByTeam.set(state.id, counts);
   }
 
   const bids: LiveBidItem[] = bidResult.rows.map((row) => ({
@@ -318,68 +314,56 @@ export async function getLiveSnapshot(
   const leaderTeamId = currentBid?.teamId ?? null;
 
   const teams: LiveTeamPublicState[] = teamsResult.rows.map((team) => {
-    const spend = spendByTeam.get(team.id);
-    const rep = playerRepsResult.rows.find((r) => r.team_id === team.id);
-    const teamSales = openSales.filter((s) => s.teamId === team.id);
-    const players: LiveRosterPlayer[] = [
-      ...(rep
-        ? [
-            {
-              amount: 0,
-              id: rep.id,
-              isRepresentative: true,
-              name: rep.display_name,
-              source: "preassigned" as const,
-              tierId: rep.tier_id,
-            },
-          ]
-        : []),
-      ...teamSales.map((s) => ({
-        amount: s.amount,
-        id: s.playerEntryId,
-        isRepresentative: false,
-        name: s.playerDisplayName,
-        source: s.source,
-        tierId: s.tierId,
-      })),
-    ];
+    const state = minimumStateById.get(team.id);
 
     return {
       color: team.color,
       id: team.id,
       isLeader: team.id === leaderTeamId,
       name: team.name,
-      players,
       position: team.position,
       remainingBudget: Math.max(0, 0),
       rosterCount: 0,
-      spentCredits: spend?.spent ?? 0,
+      spentCredits: state?.spentCredits ?? 0,
       tierCounts: tierCountsByTeam.get(team.id) ?? {},
     };
   });
 
+  // The roster is assembled from these plus `openSales`, so the same Player
+  // Representative is sent once rather than inside its Team as well.
+  const representatives: LiveRepresentative[] = playerRepsResult.rows.map(
+    (row) => ({
+      displayName: row.display_name,
+      id: row.id,
+      teamId: row.team_id,
+      tierId: row.tier_id,
+    }),
+  );
+
+  // One read of the Rule Set serves the Budget, Roster limits, Bid Increment and
+  // Timed Close duration. It is a single row, so reading it twice only adds a
+  // round trip to every snapshot.
   const rules = await db.query<{
+    bid_increment: null | number;
     budget: null | number;
     roster_max: null | number;
     roster_min: null | number;
+    timed_close_seconds: number;
   }>(
-    `select "budget", "roster_min", "roster_max"
+    `select "budget", "roster_min", "roster_max", "bid_increment",
+            "timed_close_seconds"
        from "auction_rule_set" where "auction_id" = $1`,
     [auctionId],
   );
-  const budget = rules.rows[0]?.budget ?? 0;
-  const rosterMax = rules.rows[0]?.roster_max ?? 0;
-  const rosterMin = rules.rows[0]?.roster_min ?? 0;
+  const ruleSet = rules.rows[0];
+  const budget = ruleSet?.budget ?? 0;
+  const rosterMax = ruleSet?.roster_max ?? 0;
+  const rosterMin = ruleSet?.roster_min ?? 0;
 
   for (const team of teams) {
-    const spend = spendByTeam.get(team.id);
-    const counts = tierCountsByTeam.get(team.id) ?? {};
-    const rosterCount = Object.values(counts).reduce(
-      (total, count) => total + count,
-      0,
-    );
-    team.rosterCount = rosterCount;
-    team.remainingBudget = Math.max(0, budget - (spend?.spent ?? 0));
+    const state = minimumStateById.get(team.id);
+    team.rosterCount = state?.rosterCount ?? 0;
+    team.remainingBudget = Math.max(0, budget - (state?.spentCredits ?? 0));
   }
 
   const callerTeam =
@@ -442,15 +426,7 @@ export async function getLiveSnapshot(
       }
     : null;
 
-  const increment = await db.query<{
-    bid_increment: null | number;
-    timed_close_seconds: number;
-  }>(
-    `select "bid_increment", "timed_close_seconds"
-       from "auction_rule_set" where "auction_id" = $1`,
-    [auctionId],
-  );
-  const bidIncrement = increment.rows[0]?.bid_increment ?? 0;
+  const bidIncrement = ruleSet?.bid_increment ?? 0;
   const nextBid = presentation
     ? nextBidAmount({
         bidIncrement,
@@ -466,12 +442,6 @@ export async function getLiveSnapshot(
     loadLivePlayers(db, auctionId),
   ]);
 
-  const orderedTierIds = tiers.map((tier) => tier.id);
-  const minimumStates = await loadTeamMinimumStates(
-    db,
-    auctionId,
-    orderedTierIds,
-  );
   const deficient = deficientTeamIds({
     rosterMin: rosterMin ?? 0,
     teams: minimumStates,
@@ -540,6 +510,7 @@ export async function getLiveSnapshot(
       nextTierId: nextTier?.id ?? null,
       openSales,
       players,
+      representatives,
       revision: auction.revision,
       rulesMode: auction.rules_mode,
       serverTime: timeResult.rows[0]!.now.toISOString(),
@@ -548,7 +519,7 @@ export async function getLiveSnapshot(
       tiers: liveTiers,
       timedCloseSeconds:
         auction.close_mode === "timed"
-          ? (increment.rows[0]?.timed_close_seconds ?? null)
+          ? (ruleSet?.timed_close_seconds ?? null)
           : null,
       unsoldPoolCount: pool.length,
       unsoldRound: round,
