@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { applyLiveDelta, parseLiveDeltaEvent } from "@/domain/live-delta";
 import { placeBid } from "@/server/auction-command/place-bid";
 import { selectPlayer } from "@/server/auction-command/select-player";
 import { getLiveSnapshot } from "@/server/auction-query/live-snapshot";
@@ -68,6 +69,8 @@ describe("getLiveSnapshot", () => {
 
     expect(access?.role).toBe("organizer");
     expect(access!.snapshot.teams).toHaveLength(2);
+    expect(access!.snapshot.representatives).toHaveLength(2);
+    expect(Object.keys(access!.snapshot.teams[0]!)).not.toContain("players");
     expect(access!.snapshot.activePlayer?.displayName).toBe("Player 1");
     expect(access!.snapshot.nextBidAmount).toBe(10);
     expect(access!.snapshot.you.role).toBe("organizer");
@@ -334,6 +337,59 @@ describe("outbox and revisions", () => {
     expect(drained).toBe(1);
     expect(sent).toEqual([2]);
     expect(await readPendingOutbox(pool, fixture.auctionId)).toHaveLength(0);
+  });
+
+  it("broadcasts an accepted Bid as a delta the console can apply", async () => {
+    const fixture = await buildLiveAuction("outbox-bid-delta");
+    const presentationId = await present(fixture);
+    const before = (await getLiveSnapshot(
+      pool,
+      fixture.redsRepUserId,
+      fixture.auctionId,
+    ))!.snapshot;
+
+    await placeBid(pool, {
+      actorUserId: fixture.redsRepUserId,
+      amount: 10,
+      auctionId: fixture.auctionId,
+      commandId: commandId(),
+      expectedRevision: await revision(fixture.auctionId),
+      presentationId,
+      teamId: fixture.redsTeamId,
+    });
+
+    const after = (await getLiveSnapshot(
+      pool,
+      fixture.redsRepUserId,
+      fixture.auctionId,
+    ))!.snapshot;
+    const events = await pool.query<{
+      kind: string;
+      payload: Record<string, unknown>;
+      revision: number;
+    }>(
+      `select "kind", "payload", "revision" from "auction_outbox_event"
+        where "auction_id" = $1 and "revision" > $2 order by "revision" asc`,
+      [fixture.auctionId, before.revision],
+    );
+    expect(events.rows).toHaveLength(1);
+    const event = parseLiveDeltaEvent(events.rows[0]);
+    expect(event).not.toBeNull();
+
+    const applied = applyLiveDelta(before, event!);
+    expect(applied).not.toBeNull();
+    // The delta and the authoritative snapshot must agree on everything the
+    // Broadcast carries, or a console that applies it would drift.
+    expect(applied!.currentBid).toEqual(after.currentBid);
+    expect(applied!.nextBidAmount).toBe(after.nextBidAmount);
+    expect(applied!.bids).toEqual(after.bids);
+    expect(applied!.you.isLeader).toBe(after.you.isLeader);
+    expect(applied!.activePlayer?.closeDeadline).toBe(
+      after.activePlayer?.closeDeadline,
+    );
+    expect(applied!.teams.map((team) => team.isLeader)).toEqual(
+      after.teams.map((team) => team.isLeader),
+    );
   });
 
   it("keeps the Auction revision monotonic across commands", async () => {

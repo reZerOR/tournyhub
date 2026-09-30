@@ -22,6 +22,7 @@ function snapshot(overrides: Partial<LiveSnapshot> = {}): LiveSnapshot {
     nextTierId: null,
     openSales: [],
     players: [],
+    representatives: [],
     rejections: [],
     revision: 1,
     rulesMode: "simple",

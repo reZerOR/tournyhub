@@ -256,6 +256,17 @@ export interface LiveRosterPlayer {
   tierId: null | string;
 }
 
+/**
+ * A Player Representative. Sent once at the top level rather than repeated
+ * inside every Team's roster, which triplicated the same rows on the wire.
+ */
+export interface LiveRepresentative {
+  displayName: string;
+  id: string;
+  teamId: string;
+  tierId: null | string;
+}
+
 /** Public, contact-free player directory included in authorized live snapshots. */
 export interface LivePlayerSummary {
   id: string;
@@ -278,7 +289,6 @@ export interface LiveTeamPublicState {
   id: string;
   isLeader: boolean;
   name: null | string;
-  players?: LiveRosterPlayer[];
   position: number;
   remainingBudget: number;
   rosterCount: number;
@@ -397,6 +407,8 @@ export interface LiveSnapshot {
   /** Unreversed Sales the Organizer may reverse while Paused. */
   openSales: LiveSale[];
   players: LivePlayerSummary[];
+  /** Every Player Representative, collated from the Team rows they belong to. */
+  representatives: LiveRepresentative[];
   revision: number;
   rulesMode: RulesMode;
   serverTime: string;

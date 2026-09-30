@@ -410,8 +410,13 @@ export async function placeBid(
       "bid_accepted",
       {
         amount,
+        // The payload is broadcast as the delta observers apply, so it carries
+        // everything the console needs to advance without a full snapshot pull.
+        bidAttemptId: insert.rows[0]!.id,
         closeDeadline: closeDeadline?.toISOString() ?? null,
+        nextBidAmount: amount + bidIncrement,
         presentationId: current.id,
+        serverTime: now.toISOString(),
         teamId: input.teamId,
       },
     );

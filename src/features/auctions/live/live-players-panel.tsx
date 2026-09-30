@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useId, useMemo, useState } from "react";
+import { memo, useEffect, useId, useMemo, useState } from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -255,9 +255,12 @@ export const LivePlayersPanel = memo(function LivePlayersPanel({
     defaultColumn: { sortDescFirst: false },
   });
   const pageCount = Math.max(1, table.getPageCount());
-  // A sale can remove the last match on the last page. Clamp before rendering.
-  if (pagination.pageIndex >= pageCount)
-    setPagination({ ...pagination, pageIndex: pageCount - 1 });
+  // A sale can remove the last match on the last page. Clamp in an effect
+  // rather than during render, which React does not allow.
+  useEffect(() => {
+    if (pagination.pageIndex >= pageCount)
+      setPagination((previous) => ({ ...previous, pageIndex: pageCount - 1 }));
+  }, [pageCount, pagination.pageIndex]);
   const rows = table.getRowModel().rows;
   const matchingCount = table.getFilteredRowModel().rows.length;
   const filterValue = (columnId: string) =>
@@ -273,13 +276,21 @@ export const LivePlayersPanel = memo(function LivePlayersPanel({
         tierId === "all" || (player.tierId ?? "unassigned") === tierId,
     ),
   );
+  const tierCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const player of players) {
+      const key = player.tierId ?? "unassigned";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [players]);
   const tierOptions = [
     { value: "all", label: `All tiers (${players.length})` },
     ...tiers.map((tier) => ({
       value: tier.id,
-      label: `${tier.label}${tier.isActive ? " · Active Tier" : ""} (${players.filter((player) => player.tierId === tier.id).length})`,
+      label: `${tier.label}${tier.isActive ? " · Active Tier" : ""} (${tierCounts.get(tier.id) ?? 0})`,
     })),
-    ...(players.some((player) => player.tierId === null)
+    ...(tierCounts.has("unassigned")
       ? [{ value: "unassigned", label: "Unassigned" }]
       : []),
   ];

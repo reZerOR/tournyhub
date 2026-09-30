@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { memo } from "react";
 import {
   AlertTriangle,
   Settings2,
@@ -32,7 +33,7 @@ interface LiveHeaderBarProps {
   totalSpentCredits: number;
 }
 
-export function LiveHeaderBar({
+export const LiveHeaderBar = memo(function LiveHeaderBar({
   activeTier,
   auctionId,
   closeMode,
@@ -49,43 +50,43 @@ export function LiveHeaderBar({
   totalSpentCredits,
 }: LiveHeaderBarProps) {
   return (
-    <header className="rounded-2xl border border-border/80 bg-card/90 backdrop-blur-md px-4 sm:px-6 py-3.5 shadow-md flex flex-wrap items-center justify-between gap-4">
+    <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/80 bg-card/90 px-4 py-3.5 shadow-md backdrop-blur-md sm:px-6">
       {/* Left: Branding, Title, and Lifecycle Status */}
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-neon/15 border border-neon/40 text-neon shrink-0 shadow-sm">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-neon/40 bg-neon/15 text-neon shadow-sm">
           <Trophy className="size-5" />
         </div>
 
-        <div className="flex flex-col min-w-0">
+        <div className="flex min-w-0 flex-col">
           <div className="flex items-center gap-2">
-            <h1 className="font-display font-bold text-base sm:text-lg tracking-tight text-foreground truncate">
+            <h1 className="truncate font-display text-base font-bold tracking-tight text-foreground sm:text-lg">
               {lifecycle === "paused" ? "Paused" : "Live Auction"}
             </h1>
-            <span className="rounded-full bg-muted/70 px-2 py-0.2 text-[10px] font-mono text-muted-foreground tabular-nums">
+            <span className="py-0.2 rounded-full bg-muted/70 px-2 font-mono text-[10px] text-muted-foreground tabular-nums">
               rev {revision}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {/* Live / Paused Beacon */}
             <span className="inline-flex items-center gap-1.5 font-medium">
               <span className="relative flex size-2">
                 <span
                   className={cn(
-                    "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
+                    "absolute inline-flex h-full w-full animate-ping rounded-full opacity-75",
                     lifecycle === "live" ? "bg-emerald-400" : "bg-amber-400",
                   )}
                 />
                 <span
                   className={cn(
-                    "relative inline-flex rounded-full size-2",
+                    "relative inline-flex size-2 rounded-full",
                     lifecycle === "live" ? "bg-emerald-500" : "bg-amber-500",
                   )}
                 />
               </span>
               <span
                 className={cn(
-                  "font-bold uppercase tracking-wider text-[11px]",
+                  "text-[11px] font-bold tracking-wider uppercase",
                   lifecycle === "live" ? "text-emerald-400" : "text-amber-400",
                 )}
               >
@@ -95,7 +96,9 @@ export function LiveHeaderBar({
 
             <span>·</span>
             <span>
-              {closeMode === "timed" ? `Timed Close (${timedCloseSeconds ?? 30}s)` : "Manual Close"}
+              {closeMode === "timed"
+                ? `Timed Close (${timedCloseSeconds ?? 30}s)`
+                : "Manual Close"}
             </span>
 
             {/* Connection Indicator */}
@@ -103,7 +106,9 @@ export function LiveHeaderBar({
             <span
               className={cn(
                 "inline-flex items-center gap-1 text-[11px]",
-                connectionStale ? "text-destructive font-bold" : "text-muted-foreground",
+                connectionStale
+                  ? "font-bold text-destructive"
+                  : "text-muted-foreground",
               )}
             >
               {connectionStale ? (
@@ -121,22 +126,23 @@ export function LiveHeaderBar({
       </div>
 
       {/* Middle/Right: Live Stats Strip */}
-      <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
+      <div className="flex flex-wrap items-center gap-4 sm:gap-6">
         {/* Active Tier */}
         {activeTier && (
           <div className="flex flex-col text-left">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+            <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
               Active Tier
             </span>
-            <span className="font-bold text-xs text-neon font-display">
-              {activeTier.label} ({activeTier.offeredCount}/{activeTier.biddableCount})
+            <span className="font-display text-xs font-bold text-neon">
+              {activeTier.label} ({activeTier.offeredCount}/
+              {activeTier.biddableCount})
             </span>
           </div>
         )}
 
         {/* Players In Queue */}
         <div className="flex flex-col text-left">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+          <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
             In Queue
           </span>
           <span className="font-mono text-xs font-bold text-foreground">
@@ -146,7 +152,7 @@ export function LiveHeaderBar({
 
         {/* Sales Done */}
         <div className="flex flex-col text-left">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+          <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
             Acquisitions
           </span>
           <span className="font-mono text-xs font-bold text-foreground">
@@ -156,7 +162,7 @@ export function LiveHeaderBar({
 
         {/* Teams Count */}
         <div className="flex flex-col text-left">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+          <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
             Teams
           </span>
           <span className="font-mono text-xs font-bold text-foreground">
@@ -171,7 +177,10 @@ export function LiveHeaderBar({
           ) : (
             <VolumeX className="size-4 text-muted-foreground" />
           )}
-          <label className="cursor-pointer text-[11px] font-medium select-none" htmlFor="live-sounds">
+          <label
+            className="cursor-pointer text-[11px] font-medium select-none"
+            htmlFor="live-sounds"
+          >
             Live sounds (off by default)
           </label>
           <Switch
@@ -195,4 +204,4 @@ export function LiveHeaderBar({
       </div>
     </header>
   );
-}
+});

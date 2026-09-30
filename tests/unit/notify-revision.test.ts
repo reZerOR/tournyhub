@@ -38,7 +38,7 @@ describe("notifyRevision", () => {
     vi.restoreAllMocks();
   });
 
-  it("posts only the max revision and marks both events published", async () => {
+  it("posts every pending change as a delta and marks them published", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
     const fetch = vi.fn().mockResolvedValue({ ok: true });
@@ -57,7 +57,13 @@ describe("notifyRevision", () => {
         {
           topic: "topic-auction-1",
           event: "rev",
-          payload: { revision: 5 },
+          payload: { kind: "bid", payload: {}, revision: 3 },
+          private: false,
+        },
+        {
+          topic: "topic-auction-1",
+          event: "rev",
+          payload: { kind: "bid", payload: {}, revision: 5 },
           private: false,
         },
       ],
@@ -65,7 +71,7 @@ describe("notifyRevision", () => {
     expect(db.query.mock.calls[1]![1]).toEqual([["1", "2"]]);
   });
 
-  it("does not throw on HTTP failure and still marks events published", async () => {
+  it("leaves events pending on HTTP failure so the next attempt retries them", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
     vi.stubGlobal(
@@ -76,7 +82,9 @@ describe("notifyRevision", () => {
     const db = database();
     await expect(notifyRevision(db, "auction-1")).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalled();
-    expect(db.query).toHaveBeenCalledTimes(2);
+    // Only the outbox read ran. Without the UPDATE the events stay pending, so
+    // the next command retries the nudge instead of losing it to the poll.
+    expect(db.query).toHaveBeenCalledTimes(1);
   });
 
   it("skips delivery without configuration and marks events published", async () => {

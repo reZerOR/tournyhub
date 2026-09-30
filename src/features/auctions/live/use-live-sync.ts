@@ -8,6 +8,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import type { LiveSnapshot } from "@/domain/live";
+import { parseLiveDeltaEvent, type LiveDeltaEvent } from "@/domain/live-delta";
 import { realtimeGrantAction } from "./live-actions";
 
 type PullResponse =
@@ -35,6 +36,11 @@ function getBrowserClient(): SupabaseClient | null {
 
 interface UseLiveSyncOptions {
   auctionId: string;
+  /**
+   * Applies one contiguous Broadcast delta to the state on screen, returning
+   * false when it cannot (an unknown kind, or a gap the console must resync).
+   */
+  applyDelta: (event: LiveDeltaEvent) => boolean;
   /** Called with the offset (ms) to add to server time to get local time. */
   onClockOffset: (offsetMs: number) => void;
   /** Called on a 401/404: no access, or the Auction is no longer live. */
@@ -47,15 +53,23 @@ interface UseLiveSyncOptions {
 }
 
 /**
- * Keeps the console current: Broadcast says "revision N exists", the client
- * pulls when N is newer than what it shows. A slow poll covers a dead socket,
- * and focus / visibility / online events pull immediately.
+ * Keeps the console current. A Broadcast carries the committed change itself,
+ * so a console that can apply it advances without a request; a console that
+ * cannot — an unknown kind, a missed message, or a Revision gap — pulls the
+ * snapshot, which stays the resync path. A slow poll covers a dead socket, and
+ * focus / visibility / online events pull immediately.
  */
 export function useLiveSync(options: UseLiveSyncOptions): {
   realtimeConnected: boolean;
+  /**
+   * True while a check is in flight. A pull that is merely slow is not a lost
+   * connection, so the console must not degrade its controls for one.
+   */
+  syncing: boolean;
 } {
   const { auctionId } = options;
   const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const revisionRef = useRef(options.revision);
   const handlers = useRef(options);
 
@@ -124,6 +138,7 @@ export function useLiveSync(options: UseLiveSyncOptions): {
         return;
       }
       inFlight = true;
+      if (!cancelled) setSyncing(true);
       try {
         do {
           again = false;
@@ -133,6 +148,7 @@ export function useLiveSync(options: UseLiveSyncOptions): {
         // Retried by the next trigger or the fallback timer.
       } finally {
         inFlight = false;
+        if (!cancelled) setSyncing(false);
       }
     }
 
@@ -171,8 +187,19 @@ export function useLiveSync(options: UseLiveSyncOptions): {
       channel = supabase
         .channel(grant.channel, { config: { broadcast: { self: false } } })
         .on("broadcast", { event: "rev" }, ({ payload }) => {
-          const next = Number((payload as { revision?: unknown })?.revision);
-          if (Number.isFinite(next) && next > revisionRef.current) void pull();
+          const delta = parseLiveDeltaEvent(payload);
+          // A payload that is not a delta is only a "something changed" nudge.
+          if (!delta) {
+            void pull();
+            return;
+          }
+          if (delta.revision <= revisionRef.current) return;
+          if (handlers.current.applyDelta(delta)) {
+            revisionRef.current = delta.revision;
+            handlers.current.onSynced();
+            return;
+          }
+          void pull();
         })
         .subscribe((status) => {
           if (status === "SUBSCRIBED") {
@@ -211,5 +238,5 @@ export function useLiveSync(options: UseLiveSyncOptions): {
     };
   }, [auctionId]);
 
-  return { realtimeConnected };
+  return { realtimeConnected, syncing };
 }

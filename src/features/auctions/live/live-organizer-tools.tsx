@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   AlertOctagon,
   ChevronDown,
@@ -78,7 +78,7 @@ interface LiveOrganizerToolsProps {
   unsoldRound: LiveUnsoldRound | null;
 }
 
-export function LiveOrganizerTools({
+export const LiveOrganizerTools = memo(function LiveOrganizerTools({
   activePlayer,
   activeTierId,
   correctionReason,
@@ -615,4 +615,4 @@ export function LiveOrganizerTools({
       )}
     </div>
   );
-}
+});
